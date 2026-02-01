@@ -58,11 +58,11 @@ This document outlines the phased implementation plan for the HAMMER project. Th
 ## Phase 3: The "Build" Command (Artifact Generation)
 **Goal:** Can generate the Student Bundle (Vagrantfile, Inventory) and Grading Bundle from the Execution Plan.
 
-*   [ ] Implement `hammer.builder` module.
-*   [ ] Create Jinja2 templates for `Vagrantfile` (libvirt).
-*   [ ] Create Jinja2 templates for Ansible Inventories (student & grading).
-*   [ ] Implement `hammer build` CLI command.
-*   [ ] **Manual Verification:** Can `vagrant up` the generated bundle locally.
+*   [x] Implement `hammer.builder` module.
+*   [x] Create Jinja2 templates for `Vagrantfile` (libvirt).
+*   [x] Create Jinja2 templates for Ansible Inventories (student & grading).
+*   [x] Implement `hammer build` CLI command.
+*   [x] **Manual Verification:** Can `vagrant up` the generated bundle locally.
 
 ## Phase 4: Test Generation Layer
 **Goal:** Can generate `pytest` files that verify the contracts defined in the plan.

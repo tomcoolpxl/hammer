@@ -42,8 +42,16 @@ The system follows a pipeline architecture:
     *   **Minimalism:** The v1 implementation should be a small, focused CLI.
     *   **Hard Edges:** Avoid flaky heuristic checks; prefer reachability and explicit system state.
 
+## Current Status
+
+**Phases 1-3 Complete.** The following is implemented and tested:
+
+*   `hammer validate --spec FILE` - Validates spec against Pydantic models
+*   `hammer build --spec FILE --out DIR` - Generates student/grading bundles
+*   Full integration test verified: `vagrant up`, `ansible all -m ping`, `vagrant destroy`
+
 ## Next Steps (Implementation)
 
 Please refer to **`docs/planning/IMPLEMENTATION_ROADMAP.md`** for the detailed step-by-step plan.
 
-The immediate focus is **Phase 1: Skeleton, Spec Loader, and Validation**.
+The immediate focus is **Phase 4: Test Generation Layer**.
