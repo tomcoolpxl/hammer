@@ -1,0 +1,32 @@
+"""HAMMER Generated Reachability Tests.
+
+Assignment: {{ assignment_id }}
+Phase: {{ phase }}
+
+Tests that verify network connectivity between hosts.
+"""
+
+import pytest
+from conftest import NETWORK
+
+
+{% for test in tests %}
+@pytest.mark.{{ phase }}
+def test_{{ test.from_host }}_can{% if test.expectation == "not_reachable" %}not{% endif %}_reach_{{ test.to_host }}_port_{{ test.port }}(host_{{ test.from_host }}):
+    """Verify {{ test.from_host }} {% if test.expectation == "not_reachable" %}cannot{% else %}can{% endif %} reach {{ test.to_host }} on port {{ test.port }}/{{ test.protocol }}."""
+    target_ip = NETWORK["{{ test.to_host }}"]
+{% if test.protocol == "tcp" %}
+    cmd = host_{{ test.from_host }}.run(f"nc -zv -w 5 {target_ip} {{ test.port }}")
+{% else %}
+    cmd = host_{{ test.from_host }}.run(f"nc -zuv -w 5 {target_ip} {{ test.port }}")
+{% endif %}
+{% if test.expectation == "reachable" %}
+    assert cmd.rc == 0, \
+        f"{{ test.from_host }} should be able to reach {{ test.to_host }} ({target_ip}) on port {{ test.port }}/{{ test.protocol }}"
+{% else %}
+    assert cmd.rc != 0, \
+        f"{{ test.from_host }} should NOT be able to reach {{ test.to_host }} ({target_ip}) on port {{ test.port }}/{{ test.protocol }}"
+{% endif %}
+
+
+{% endfor %}

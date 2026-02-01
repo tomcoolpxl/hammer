@@ -67,12 +67,12 @@ This document outlines the phased implementation plan for the HAMMER project. Th
 ## Phase 4: Test Generation Layer
 **Goal:** Can generate `pytest` files that verify the contracts defined in the plan.
 
-*   [ ] Design the mapping from `PhaseContractPlan` to `test_*.py` content.
-*   [ ] Implement test generators for:
+*   [x] Design the mapping from `PhaseContractPlan` to `test_*.py` content.
+*   [x] Implement test generators for:
     *   Bindings (port, file content, etc.)
     *   Services/Packages
     *   Reachability
-*   [ ] Update `hammer build` to emit these tests into the bundles.
+*   [x] Update `hammer build` to emit these tests into the bundles.
 
 ## Phase 5: The "Grade" Command (Runner)
 **Goal:** Can execute the grading pipeline (Converge -> Snapshot -> Verify) on a local student repo.

@@ -32,6 +32,7 @@ from hammer.builder.scaffolding import (
     create_student_bundle_structure,
     create_grading_bundle_structure,
 )
+from hammer.testgen import generate_tests
 
 
 __all__ = [
@@ -181,3 +182,6 @@ def _build_grading_bundle(
 
     # Phase overlays
     write_grading_phase_overlays(spec, plan, output_dir)
+
+    # Generate tests
+    generate_tests(spec, plan, network, output_dir)
