@@ -1,0 +1,79 @@
+---
+# HAMMER Snapshot Extraction Playbook
+# Assignment: {{ assignment_id }}
+# Phase: {{ phase }}
+#
+# This playbook collects system state for verification.
+
+- name: Collect system snapshot
+  hosts: all
+  gather_facts: yes
+  become: yes
+
+  tasks:
+    - name: Get listening TCP ports
+      ansible.builtin.shell: ss -tlnp | tail -n +2
+      register: tcp_ports
+      changed_when: false
+
+    - name: Get listening UDP ports
+      ansible.builtin.shell: ss -ulnp | tail -n +2
+      register: udp_ports
+      changed_when: false
+
+    - name: Get service states
+      ansible.builtin.shell: |
+        systemctl list-units --type=service --state=running --no-pager --no-legend | awk '{print $1}'
+      register: running_services
+      changed_when: false
+
+    - name: Get enabled services
+      ansible.builtin.shell: |
+        systemctl list-unit-files --type=service --state=enabled --no-pager --no-legend | awk '{print $1}'
+      register: enabled_services
+      changed_when: false
+
+    - name: Get firewall zones
+      ansible.builtin.shell: firewall-cmd --get-active-zones 2>/dev/null || echo "firewalld not active"
+      register: firewall_zones
+      changed_when: false
+      failed_when: false
+
+    - name: Get firewall ports for public zone
+      ansible.builtin.shell: firewall-cmd --zone=public --list-ports 2>/dev/null || echo ""
+      register: firewall_ports
+      changed_when: false
+      failed_when: false
+
+    - name: Get installed packages
+      ansible.builtin.shell: rpm -qa --qf '%{NAME}\n' | sort
+      register: installed_packages
+      changed_when: false
+
+{% for file_path in files_to_check %}
+    - name: Check file {{ file_path }}
+      ansible.builtin.stat:
+        path: "{{ file_path }}"
+      register: file_stat_{{ loop.index }}
+
+{% endfor %}
+    - name: Write snapshot to file
+      ansible.builtin.copy:
+        content: |
+          {
+            "hostname": "{{ '{{' }} ansible_hostname {{ '}}' }}",
+            "tcp_ports": {{ '{{' }} tcp_ports.stdout_lines | to_json {{ '}}' }},
+            "udp_ports": {{ '{{' }} udp_ports.stdout_lines | to_json {{ '}}' }},
+            "running_services": {{ '{{' }} running_services.stdout_lines | to_json {{ '}}' }},
+            "enabled_services": {{ '{{' }} enabled_services.stdout_lines | to_json {{ '}}' }},
+            "firewall_ports": "{{ '{{' }} firewall_ports.stdout {{ '}}' }}",
+            "installed_packages": {{ '{{' }} installed_packages.stdout_lines | to_json {{ '}}' }}
+          }
+        dest: "/tmp/hammer_snapshot_{{ '{{' }} ansible_hostname {{ '}}' }}.json"
+      changed_when: false
+
+    - name: Fetch snapshot file
+      ansible.builtin.fetch:
+        src: "/tmp/hammer_snapshot_{{ '{{' }} ansible_hostname {{ '}}' }}.json"
+        dest: "{{ snapshot_dir }}/"
+        flat: no
