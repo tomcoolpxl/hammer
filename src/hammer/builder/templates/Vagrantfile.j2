@@ -1,0 +1,24 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# HAMMER Assignment: {{ assignment_id }}
+# Generated Vagrantfile - Do not edit manually
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "{{ box_name }}"
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+
+{% for node in nodes %}
+  config.vm.define "{{ node.name }}" do |{{ node.name }}|
+    {{ node.name }}.vm.hostname = "{{ node.name }}"
+    {{ node.name }}.vm.network "private_network",
+      ip: "{{ network.node_ip_map[node.name] }}"
+
+    {{ node.name }}.vm.provider :libvirt do |libvirt|
+      libvirt.memory = {{ node.resources.ram_mb }}
+      libvirt.cpus = {{ node.resources.cpu }}
+    end
+  end
+
+{% endfor %}
+end

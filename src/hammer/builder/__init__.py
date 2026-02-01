@@ -1,0 +1,183 @@
+"""HAMMER Builder - Artifact generation for assignments.
+
+This module orchestrates the generation of student and grading bundles
+from a validated spec and execution plan.
+"""
+
+from pathlib import Path
+from typing import Dict
+
+from hammer.spec import HammerSpec
+from hammer.plan import ExecutionPlan, build_execution_plan
+from hammer.builder.network import NetworkPlan, generate_network_plan
+from hammer.builder.vagrantfile import render_vagrantfile
+from hammer.builder.inventory import (
+    render_student_inventory,
+    render_ansible_cfg,
+    write_student_group_vars,
+    write_student_host_vars,
+    write_grading_inventory,
+    write_grading_group_vars,
+    write_grading_host_vars,
+    write_grading_phase_overlays,
+)
+from hammer.builder.lock import (
+    LockArtifact,
+    compute_file_checksum,
+    create_lock_artifact,
+    write_lock_artifact,
+)
+from hammer.builder.scaffolding import (
+    render_readme,
+    create_student_bundle_structure,
+    create_grading_bundle_structure,
+)
+
+
+__all__ = [
+    "build_assignment",
+    "NetworkPlan",
+    "LockArtifact",
+]
+
+
+def build_assignment(
+    spec: HammerSpec,
+    output_dir: Path,
+    box_version: str = "generic/alma9",
+) -> LockArtifact:
+    """
+    Build student and grading bundles from a spec.
+
+    Creates:
+    - student_bundle/ - Infrastructure for students
+    - grading_bundle/ - Infrastructure + overlays for grading
+    - lock.json - Reproducibility artifact
+
+    Args:
+        spec: Validated HAMMER spec
+        output_dir: Root directory for output
+        box_version: Vagrant box to use (default: generic/alma9)
+
+    Returns:
+        LockArtifact containing checksums and versions
+    """
+    # Generate execution plan
+    plan = build_execution_plan(spec)
+
+    # Generate network plan
+    network = generate_network_plan(spec)
+
+    # Track checksums for lock artifact
+    checksums: Dict[str, str] = {}
+
+    # Create output directories
+    output_dir.mkdir(parents=True, exist_ok=True)
+    student_dir = output_dir / "student_bundle"
+    grading_dir = output_dir / "grading_bundle"
+
+    # Build student bundle
+    _build_student_bundle(spec, plan, network, student_dir, box_version, checksums)
+
+    # Build grading bundle
+    _build_grading_bundle(spec, plan, network, grading_dir, box_version, checksums)
+
+    # Create lock artifact
+    lock = create_lock_artifact(spec, network, box_version, checksums)
+
+    # Write lock.json
+    lock_path = output_dir / "lock.json"
+    write_lock_artifact(lock, lock_path)
+
+    return lock
+
+
+def _build_student_bundle(
+    spec: HammerSpec,
+    plan: ExecutionPlan,
+    network: NetworkPlan,
+    output_dir: Path,
+    box_version: str,
+    checksums: Dict[str, str],
+) -> None:
+    """Build the student bundle."""
+    create_student_bundle_structure(output_dir)
+
+    # Vagrantfile
+    vagrantfile_content = render_vagrantfile(spec, network, box_version)
+    vagrantfile_path = output_dir / "Vagrantfile"
+    with open(vagrantfile_path, "w") as f:
+        f.write(vagrantfile_content)
+    checksums["student_bundle/Vagrantfile"] = compute_file_checksum(vagrantfile_content)
+
+    # Inventory
+    inventory_content = render_student_inventory(spec, network)
+    inventory_path = output_dir / "inventory" / "hosts.yml"
+    with open(inventory_path, "w") as f:
+        f.write(inventory_content)
+    checksums["student_bundle/inventory/hosts.yml"] = compute_file_checksum(
+        inventory_content
+    )
+
+    # ansible.cfg
+    ansible_cfg_content = render_ansible_cfg(
+        inventory_path="inventory/hosts.yml",
+        roles_path="roles",
+    )
+    ansible_cfg_path = output_dir / "ansible.cfg"
+    with open(ansible_cfg_path, "w") as f:
+        f.write(ansible_cfg_content)
+    checksums["student_bundle/ansible.cfg"] = compute_file_checksum(ansible_cfg_content)
+
+    # Group vars
+    write_student_group_vars(spec, plan, output_dir)
+
+    # Host vars
+    write_student_host_vars(spec, network, output_dir)
+
+    # README
+    readme_content = render_readme(spec, network)
+    readme_path = output_dir / "README.md"
+    with open(readme_path, "w") as f:
+        f.write(readme_content)
+    checksums["student_bundle/README.md"] = compute_file_checksum(readme_content)
+
+
+def _build_grading_bundle(
+    spec: HammerSpec,
+    plan: ExecutionPlan,
+    network: NetworkPlan,
+    output_dir: Path,
+    box_version: str,
+    checksums: Dict[str, str],
+) -> None:
+    """Build the grading bundle."""
+    create_grading_bundle_structure(output_dir)
+
+    # Vagrantfile (same as student)
+    vagrantfile_content = render_vagrantfile(spec, network, box_version)
+    vagrantfile_path = output_dir / "Vagrantfile"
+    with open(vagrantfile_path, "w") as f:
+        f.write(vagrantfile_content)
+    checksums["grading_bundle/Vagrantfile"] = compute_file_checksum(vagrantfile_content)
+
+    # Inventory
+    write_grading_inventory(spec, network, output_dir)
+
+    # ansible.cfg
+    ansible_cfg_content = render_ansible_cfg(
+        inventory_path="inventory/hosts.yml",
+    )
+    ansible_cfg_path = output_dir / "ansible.cfg"
+    with open(ansible_cfg_path, "w") as f:
+        f.write(ansible_cfg_content)
+    checksums["grading_bundle/ansible.cfg"] = compute_file_checksum(ansible_cfg_content)
+
+    # Group vars (base)
+    write_grading_group_vars(spec, plan, output_dir)
+
+    # Host vars
+    write_grading_host_vars(spec, network, output_dir)
+
+    # Phase overlays
+    write_grading_phase_overlays(spec, plan, output_dir)
