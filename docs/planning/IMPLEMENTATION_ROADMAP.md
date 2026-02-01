@@ -50,10 +50,10 @@ This document outlines the phased implementation plan for the HAMMER project. Th
 ## Phase 2: Normalization & Execution Plan Builder
 **Goal:** Can convert a loaded spec into a deterministic "Execution Plan" (JSON-serializable).
 
-*   [ ] Implement `hammer.plan` module using `docs/design/02_normalization_logic.md`.
-*   [ ] Implement variable resolution logic (defaults < inventory < group < host < extra).
-*   [ ] Implement phase contract planning (bindings, handlers).
-*   [ ] Unit test the "Planner": Input Spec -> Output Plan JSON. Verify determinism.
+*   [x] Implement `hammer.plan` module using `docs/design/02_normalization_logic.md`.
+*   [x] Implement variable resolution logic (defaults < inventory < group < host < extra).
+*   [x] Implement phase contract planning (bindings, handlers).
+*   [x] Unit test the "Planner": Input Spec -> Output Plan JSON. Verify determinism.
 
 ## Phase 3: The "Build" Command (Artifact Generation)
 **Goal:** Can generate the Student Bundle (Vagrantfile, Inventory) and Grading Bundle from the Execution Plan.
