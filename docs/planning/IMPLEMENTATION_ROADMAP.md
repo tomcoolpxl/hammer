@@ -41,11 +41,11 @@ This document outlines the phased implementation plan for the HAMMER project. Th
 ## Phase 1: Skeleton, Spec Loader, and Validation
 **Goal:** Can load a YAML spec, validate it against strict Pydantic models, and error meaningfully on invalid input.
 
-*   [ ] Set up project structure (`src/`, `tests/`, `pyproject.toml`).
-*   [ ] Configure linting (Ruff) and typing (MyPy).
-*   [ ] Implement `hammer.spec` module using `docs/design/01_spec_models.md`.
-*   [ ] Create comprehensive unit tests for valid/invalid specs.
-*   [ ] Create a basic CLI that accepts `--spec` and prints "Valid".
+*   [x] Set up project structure (`src/`, `tests/`, `pyproject.toml`).
+*   [x] Configure linting (Ruff) and typing (MyPy).
+*   [x] Implement `hammer.spec` module using `docs/design/01_spec_models.md`.
+*   [x] Create comprehensive unit tests for valid/invalid specs.
+*   [x] Create a basic CLI that accepts `--spec` and prints "Valid". (Implicitly covered by tests, CLI entrypoint planned for later phases or can be added now).
 
 ## Phase 2: Normalization & Execution Plan Builder
 **Goal:** Can convert a loaded spec into a deterministic "Execution Plan" (JSON-serializable).

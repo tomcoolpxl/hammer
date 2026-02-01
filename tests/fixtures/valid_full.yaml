@@ -1,0 +1,176 @@
+assignment_id: "hammer-nginx-port"
+assignment_version: "2026.02"
+spec_version: "1.0"
+seed: 1337
+provider: "libvirt"
+os: "almalinux9"
+
+features:
+  vault: false
+  selinux: false
+  handlers: true
+  reachability: true
+
+topology:
+  nodes:
+    - name: "web1"
+      groups: ["web"]
+      resources:
+        cpu: 2
+        ram_mb: 2048
+    - name: "app1"
+      groups: ["app"]
+      resources:
+        cpu: 1
+        ram_mb: 1024
+  dependencies:
+    - from_host: "app1"
+      to_host: "web1"
+      kind: "reachability"
+
+entrypoints:
+  playbook_path: "site.yml"
+  required_roles: ["web"]
+  required_files: ["site.yml"]
+
+variable_contracts:
+  - name: "http_port"
+    type: "int"
+    defaults:
+      student: 8080
+    allowed_values: [8080, 9090]
+    grading_overlay_targets:
+      - overlay_kind: "group_vars"
+        target_name: "web"
+      - overlay_kind: "extra_vars"
+        target_name: "all"
+    bindings_mode: "all"
+    binding_targets:
+      - type: "service_listen_port"
+        weight: 1.0
+        target:
+          service: "nginx"
+          protocol: "tcp"
+          address: "0.0.0.0"
+      - type: "firewall_port_open"
+        weight: 1.0
+        target:
+          zone: "public"
+          protocol: "tcp"
+      - type: "template_contains"
+        weight: 1.0
+        target:
+          path: "/etc/nginx/conf.d/hammer.conf"
+          pattern: "listen {{ value }};"
+
+  - name: "welcome_text"
+    type: "string"
+    defaults:
+      student: "hello"
+    allowed_values: ["hello", "bonjour"]
+    grading_overlay_targets:
+      - overlay_kind: "group_vars"
+        target_name: "web"
+    bindings_mode: "all"
+    binding_targets:
+      - type: "file_contains"
+        weight: 1.0
+        target:
+          path: "/usr/share/nginx/html/index.html"
+          pattern: "{{ value }}"
+
+precedence_scenarios:
+  - name: "extra_vars_overrides_group_vars_http_port"
+    variable: "http_port"
+    layers: ["group_vars", "extra_vars"]
+    expected_winner: "extra_vars"
+    bindings_to_verify: [0, 1, 2]
+    phase: "mutation"
+
+behavioral_contracts:
+  packages:
+    - name: "nginx"
+      state: "present"
+      node_selector:
+        group: "web"
+      weight: 1.0
+  services:
+    - name: "nginx"
+      enabled: true
+      running: true
+      node_selector:
+        group: "web"
+      weight: 1.0
+  firewall:
+    - open_ports:
+        - port: { var: "http_port" }
+          protocol: "tcp"
+          zone: "public"
+      node_selector:
+        group: "web"
+      weight: 1.0
+  files:
+    - items:
+        - path: "/etc/nginx/conf.d/hammer.conf"
+          present: true
+          mode: "0644"
+          owner: "root"
+          group: "root"
+          content_regex: "listen"
+        - path: "/usr/share/nginx/html/index.html"
+          present: true
+      node_selector:
+        group: "web"
+      weight: 1.0
+  reachability:
+    - from_host: "app1"
+      to_host: "web1"
+      protocol: "tcp"
+      port: { var: "http_port" }
+      expectation: "reachable"
+      weight: 1.0
+
+handler_contracts:
+  - handler_name: "restart nginx"
+    node_selector:
+      group: "web"
+    handler_target:
+      service: "nginx"
+      action: "restart"
+    trigger_conditions:
+      - template_changed: "/etc/nginx/conf.d/hammer.conf"
+      - variable_changed: "http_port"
+    non_trigger_conditions:
+      - noop_rerun: true
+      - unrelated_file_changed: "/etc/hosts"
+    expected_runs:
+      baseline: "at_least_once"
+      mutation: "exactly_once"
+      idempotence: "zero"
+    weight: 2.0
+
+idempotence:
+  required: true
+  allowed_changes: []
+  enforcement:
+    require_changed_zero: true
+    require_no_handlers: true
+
+phase_overlays:
+  baseline:
+    group_vars:
+      web:
+        http_port: 8080
+        welcome_text: "hello"
+    host_vars: {}
+    inventory_vars: {}
+    extra_vars: {}
+  mutation:
+    group_vars:
+      web:
+        http_port: 8080
+        welcome_text: "bonjour"
+    host_vars: {}
+    inventory_vars: {}
+    extra_vars:
+      http_port: 9090

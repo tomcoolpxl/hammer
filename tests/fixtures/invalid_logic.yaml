@@ -1,0 +1,49 @@
+assignment_id: "hammer-invalid-var-logic"
+assignment_version: "2026.02"
+spec_version: "1.0"
+seed: 1337
+provider: "libvirt"
+os: "almalinux9"
+
+features:
+  vault: false
+  selinux: false
+  handlers: false
+  reachability: false
+
+topology:
+  nodes:
+    - name: "node1"
+      groups: ["all"]
+      resources:
+        cpu: 1
+        ram_mb: 1024
+
+entrypoints:
+  playbook_path: "site.yml"
+
+# DEFECT: Variable 'broken_var' has bindings but is NOT in phase_overlays
+variable_contracts:
+  - name: "broken_var"
+    type: "string"
+    defaults:
+      student: "val1"
+    allowed_values: ["val1", "val2"]
+    grading_overlay_targets:
+      - overlay_kind: "group_vars"
+        target_name: "all"
+    binding_targets:
+      - type: "file_contains"
+        weight: 1.0
+        target:
+          path: "/tmp/foo"
+          pattern: "{{ value }}"
+
+idempotence:
+  required: true
+
+phase_overlays:
+  baseline:
+    group_vars: {}
+  mutation:
+    group_vars: {}

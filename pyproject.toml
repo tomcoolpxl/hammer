@@ -1,0 +1,38 @@
+[project]
+name = "hammer"
+version = "0.1.0"
+description = "Hands-on Ansible Multi-node Machine Evaluation Runner"
+authors = [{name = "HAMMER Team"}]
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "types-PyYAML",
+]
+
+[project.scripts]
+hammer = "hammer.cli:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
