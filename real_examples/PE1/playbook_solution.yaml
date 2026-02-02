@@ -1,0 +1,124 @@
+# PE1 Complete Solution - covers Basic + all Extras
+# This playbook demonstrates the expected solution for the PE1 assignment
+#
+# BASIC (50%):
+#   - Deploy app.py to /opt/pyramid_app
+#   - Install python3, python3-pip
+#   - Install pip packages: pyramid, waitress, psutil, distro
+#   - App runs on port 6000 and accessible at /hostname
+#
+# EXTRA 1 (20%): iptables firewall
+#   - Install iptables-services
+#   - iptables service running and enabled
+#   - Port 6000 open in iptables
+#
+# EXTRA 2 (15%): App runs after reboot via systemd
+#   - Deploy systemd unit file
+#   - Service enabled and started
+#
+# EXTRA 3 (15%): User management
+#   - Create app_user
+#   - app_user owns /opt/pyramid_app and app.py
+
+- name: Install and configure Pyramid application
+  hosts: all
+  become: true
+  vars:
+    app_user: app_user
+    app_port: 6000
+
+  tasks:
+    # ===================
+    # BASIC SETUP
+    # ===================
+
+    # Install system packages
+    - name: Install system packages
+      ansible.builtin.yum:
+        name:
+          - python3
+          - python3-pip
+        state: present
+
+    # Install Python packages for the pyramid app
+    - name: Install Python packages
+      ansible.builtin.pip:
+        name:
+          - pyramid
+          - waitress
+          - psutil
+          - distro
+        state: present
+
+    # ===================
+    # EXTRA 3: User management
+    # ===================
+
+    - name: Create app_user
+      ansible.builtin.user:
+        name: "{{ app_user }}"
+        state: present
+        system: yes
+        shell: /sbin/nologin
+
+    # Create the app directory with correct ownership
+    - name: Create app directory
+      ansible.builtin.file:
+        path: /opt/pyramid_app
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0755'
+
+    # Copy the app files to the server
+    - name: Copy app files
+      ansible.builtin.copy:
+        src: files/app.py
+        dest: /opt/pyramid_app/app.py
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0644'
+
+    # ===================
+    # EXTRA 1: iptables firewall
+    # ===================
+
+    - name: Install iptables package
+      ansible.builtin.yum:
+        name: iptables-services
+        state: present
+
+    - name: Enable iptables service
+      ansible.builtin.systemd:
+        name: iptables
+        state: started
+        enabled: true
+
+    - name: Open port 6000 in iptables
+      ansible.builtin.iptables:
+        chain: INPUT
+        protocol: tcp
+        destination_port: "{{ app_port }}"
+        jump: ACCEPT
+        action: insert
+        rule_num: 1
+
+    # ===================
+    # EXTRA 2: systemd service
+    # ===================
+
+    - name: Copy systemd unit file
+      ansible.builtin.template:
+        src: templates/app.service.j2
+        dest: /etc/systemd/system/app.service
+        mode: '0644'
+
+    - name: Reload systemd config
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Enable and start app service
+      ansible.builtin.systemd:
+        name: app
+        state: started
+        enabled: true

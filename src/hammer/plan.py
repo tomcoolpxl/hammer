@@ -54,6 +54,14 @@ class PackageCheck(BaseModel):
     weight: float
 
 
+class PipPackageCheck(BaseModel):
+    host_targets: List[str]
+    name: str
+    state: str
+    python: str  # Python executable path
+    weight: float
+
+
 class ServiceCheck(BaseModel):
     host_targets: List[str]
     name: str
@@ -62,9 +70,22 @@ class ServiceCheck(BaseModel):
     weight: float
 
 
+class UserCheck(BaseModel):
+    host_targets: List[str]
+    name: str
+    exists: bool
+    uid: int | None
+    gid: int | None
+    home: str | None
+    shell: str | None
+    groups: List[str] | None
+    weight: float
+
+
 class FirewallCheck(BaseModel):
     host_targets: List[str]
     ports: List[Dict[str, Any]]
+    firewall_type: str = "firewalld"  # firewalld or iptables
     weight: float
 
 
@@ -80,6 +101,17 @@ class ReachabilityCheck(BaseModel):
     protocol: str
     port: Any
     expectation: str
+    weight: float
+
+
+class HttpEndpointCheck(BaseModel):
+    host_targets: List[str]  # Nodes to run the test from
+    url: str
+    method: str
+    expected_status: int
+    response_contains: str | None
+    response_regex: str | None
+    timeout_seconds: int
     weight: float
 
 
@@ -109,10 +141,13 @@ class PhaseContractPlan(BaseModel):
     phase: ExecutionPhaseName
     bindings: List[BindingCheck]
     packages: List[PackageCheck]
+    pip_packages: List[PipPackageCheck]
     services: List[ServiceCheck]
+    users: List[UserCheck]
     firewall: List[FirewallCheck]
     files: List[FileCheck]
     reachability: List[ReachabilityCheck]
+    http_endpoints: List[HttpEndpointCheck]
     handlers: List[HandlerPlan]
 
 
@@ -241,17 +276,41 @@ def build_binding_checks(spec: HammerSpec, phase_vars: PhaseVariablePlan) -> Lis
     return checks
 
 
-def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> Tuple[List[PackageCheck], List[ServiceCheck], List[FirewallCheck], List[FileCheck], List[ReachabilityCheck]]:
+class BehavioralChecks(BaseModel):
+    """Container for all behavioral checks."""
+    packages: List[PackageCheck]
+    pip_packages: List[PipPackageCheck]
+    services: List[ServiceCheck]
+    users: List[UserCheck]
+    firewall: List[FirewallCheck]
+    files: List[FileCheck]
+    reachability: List[ReachabilityCheck]
+    http_endpoints: List[HttpEndpointCheck]
+
+
+def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> BehavioralChecks:
 
     packages: List[PackageCheck] = []
+    pip_packages: List[PipPackageCheck] = []
     services: List[ServiceCheck] = []
+    users: List[UserCheck] = []
     firewall: List[FirewallCheck] = []
     files: List[FileCheck] = []
     reachability: List[ReachabilityCheck] = []
+    http_endpoints: List[HttpEndpointCheck] = []
 
     bc = spec.behavioral_contracts
     if not bc:
-        return packages, services, firewall, files, reachability
+        return BehavioralChecks(
+            packages=packages,
+            pip_packages=pip_packages,
+            services=services,
+            users=users,
+            firewall=firewall,
+            files=files,
+            reachability=reachability,
+            http_endpoints=http_endpoints,
+        )
 
     if bc.packages:
         for p in bc.packages:
@@ -260,6 +319,18 @@ def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> Tuple[List[
                     host_targets=resolve_node_selector(p.node_selector, topology),
                     name=p.name,
                     state=p.state,
+                    weight=p.weight,
+                )
+            )
+
+    if bc.pip_packages:
+        for p in bc.pip_packages:
+            pip_packages.append(
+                PipPackageCheck(
+                    host_targets=resolve_node_selector(p.node_selector, topology),
+                    name=p.name,
+                    state=p.state,
+                    python=p.python or "/usr/bin/python3",
                     weight=p.weight,
                 )
             )
@@ -276,12 +347,29 @@ def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> Tuple[List[
                 )
             )
 
+    if bc.users:
+        for u in bc.users:
+            users.append(
+                UserCheck(
+                    host_targets=resolve_node_selector(u.node_selector, topology),
+                    name=u.name,
+                    exists=u.exists,
+                    uid=u.uid,
+                    gid=u.gid,
+                    home=u.home,
+                    shell=u.shell,
+                    groups=u.groups,
+                    weight=u.weight,
+                )
+            )
+
     if bc.firewall:
         for f in bc.firewall:
             firewall.append(
                 FirewallCheck(
                     host_targets=resolve_node_selector(f.node_selector, topology),
                     ports=[port.model_dump() for port in f.open_ports],
+                    firewall_type=f.firewall_type,
                     weight=f.weight,
                 )
             )
@@ -309,7 +397,31 @@ def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> Tuple[List[
                 )
             )
 
-    return packages, services, firewall, files, reachability
+    if bc.http_endpoints:
+        for h in bc.http_endpoints:
+            http_endpoints.append(
+                HttpEndpointCheck(
+                    host_targets=resolve_node_selector(h.node_selector, topology),
+                    url=h.url,
+                    method=h.method,
+                    expected_status=h.expected_status,
+                    response_contains=h.response_contains,
+                    response_regex=h.response_regex,
+                    timeout_seconds=h.timeout_seconds,
+                    weight=h.weight,
+                )
+            )
+
+    return BehavioralChecks(
+        packages=packages,
+        pip_packages=pip_packages,
+        services=services,
+        users=users,
+        firewall=firewall,
+        files=files,
+        reachability=reachability,
+        http_endpoints=http_endpoints,
+    )
 
 
 def build_handler_plans(spec: HammerSpec, topology: Topology) -> List[HandlerPlan]:
@@ -356,19 +468,21 @@ def build_phase_contract_plan(spec: HammerSpec, topology: Topology, phase_name: 
 
     bindings = build_binding_checks(spec, phase_vars)
 
-    packages, services, firewall, files, reachability = \
-        build_behavioral_checks(spec, topology)
+    behavioral = build_behavioral_checks(spec, topology)
 
     handlers = build_handler_plans(spec, topology)
 
     return PhaseContractPlan(
         phase=phase_name,
         bindings=bindings,
-        packages=packages,
-        services=services,
-        firewall=firewall,
-        files=files,
-        reachability=reachability,
+        packages=behavioral.packages,
+        pip_packages=behavioral.pip_packages,
+        services=behavioral.services,
+        users=behavioral.users,
+        firewall=behavioral.firewall,
+        files=behavioral.files,
+        reachability=behavioral.reachability,
+        http_endpoints=behavioral.http_endpoints,
         handlers=handlers,
     )
 

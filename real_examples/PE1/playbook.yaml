@@ -1,0 +1,53 @@
+- name: Install and configure Pyramid application
+  hosts: all
+  become: true
+  tasks:
+  # Install necessary packages
+  - name: Install system packages
+    yum:
+      name: ['python3', 'python3-pip']
+      state: latest
+
+  # Install Python packages
+  - name: Install Python packages
+    pip:
+      name: ['pyramid', 'psutil', 'waitress', 'distro']
+      state: latest
+
+  # Create the app directory
+  - name: Create app directory
+    file:
+      path: /opt/pyramid_app
+      state: directory
+
+  # Copy the app files to the server
+  - name: Copy app files
+    copy:
+      src: files/app.py
+      dest: /opt/pyramid_app/app.py
+
+  # Start the app using Python in the background
+  - name: Start app
+    shell: "nohup /usr/bin/python3 app.py &"
+    args:
+      chdir: /opt/pyramid_app
+
+  - name: Install iptables package
+    yum:
+      name: iptables-services
+      state: latest
+
+  - name: Enable iptables service
+    systemd:
+      name: iptables
+      state: started
+      enabled: true
+
+  - name: Open port 6000 in iptables
+    iptables:
+      chain: INPUT
+      protocol: tcp
+      destination_port: 6000
+      jump: ACCEPT
+      action: insert
+      rule_num: 1

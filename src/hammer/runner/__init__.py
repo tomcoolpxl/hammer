@@ -173,6 +173,15 @@ def _setup_student_files(
             shutil.rmtree(dst_templates)
         shutil.copytree(src_templates, dst_templates)
 
+    # Copy files directory if it exists
+    src_files = student_repo / "files"
+    dst_files = grading_dir / "files"
+
+    if src_files.exists():
+        if dst_files.exists():
+            shutil.rmtree(dst_files)
+        shutil.copytree(src_files, dst_files)
+
     # Copy any required files
     if spec.entrypoints.required_files:
         for req_file in spec.entrypoints.required_files:

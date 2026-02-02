@@ -129,6 +129,7 @@ def _cmd_build(args):
                 spec=spec,
                 output_dir=args.out,
                 box_version=args.box_version,
+                spec_dir=args.spec.parent,
             )
 
         console.print("[green]Build complete![/green]")

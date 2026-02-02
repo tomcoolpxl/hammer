@@ -15,11 +15,19 @@ import pytest
 @pytest.mark.{{ phase }}
 @pytest.mark.weight({{ test.weight }})
 def test_firewall_port_{{ port.port }}_{{ port.protocol }}_on_{{ host }}(host_{{ host }}):
-    """Verify firewall allows {{ port.port }}/{{ port.protocol }} in zone {{ port.zone }} on {{ host }}."""
+    """Verify firewall allows {{ port.port }}/{{ port.protocol }} on {{ host }}."""
+{% if test.firewall_type == "iptables" %}
+    # Check iptables for port rule
+    cmd = host_{{ host }}.run("sudo iptables -L INPUT -n | grep -E 'dpt:{{ port.port }}.*ACCEPT|ACCEPT.*dpt:{{ port.port }}'")
+    assert cmd.rc == 0, \
+        f"Port {{ port.port }}/{{ port.protocol }} should be allowed in iptables INPUT chain on {{ host }}"
+{% else %}
+    # Check firewalld for port in zone
     cmd = host_{{ host }}.run("sudo firewall-cmd --list-ports --zone={{ port.zone }}")
     assert cmd.rc == 0, f"Failed to query firewall on {{ host }}"
     assert "{{ port.port }}/{{ port.protocol }}" in cmd.stdout, \
         f"Port {{ port.port }}/{{ port.protocol }} should be open in zone {{ port.zone }} on {{ host }}"
+{% endif %}
 
 
 {% endfor %}

@@ -1,0 +1,44 @@
+"""HAMMER Generated User Tests.
+
+Assignment: {{ assignment_id }}
+Phase: {{ phase }}
+
+Tests that verify system users exist with correct properties.
+"""
+
+import pytest
+
+
+{% for test in tests %}
+{% for host in test.hosts %}
+@pytest.mark.{{ phase }}
+@pytest.mark.weight({{ test.weight }})
+def test_user_{{ test.name }}_on_{{ host }}(host_{{ host }}):
+    """Verify user {{ test.name }} {{ "exists" if test.exists else "does not exist" }} on {{ host }}."""
+    user = host_{{ host }}.user("{{ test.name }}")
+{% if test.exists %}
+    assert user.exists, f"User {{ test.name }} should exist on {{ host }}"
+{% if test.uid is not none %}
+    assert user.uid == {{ test.uid }}, f"User {{ test.name }} should have UID {{ test.uid }} on {{ host }}"
+{% endif %}
+{% if test.gid is not none %}
+    assert user.gid == {{ test.gid }}, f"User {{ test.name }} should have GID {{ test.gid }} on {{ host }}"
+{% endif %}
+{% if test.home is not none %}
+    assert user.home == "{{ test.home }}", f"User {{ test.name }} should have home {{ test.home }} on {{ host }}"
+{% endif %}
+{% if test.shell is not none %}
+    assert user.shell == "{{ test.shell }}", f"User {{ test.name }} should have shell {{ test.shell }} on {{ host }}"
+{% endif %}
+{% if test.groups is not none and test.groups | length > 0 %}
+    expected_groups = {{ test.groups }}
+    for group in expected_groups:
+        assert group in user.groups, f"User {{ test.name }} should be in group {group} on {{ host }}"
+{% endif %}
+{% else %}
+    assert not user.exists, f"User {{ test.name }} should not exist on {{ host }}"
+{% endif %}
+
+
+{% endfor %}
+{% endfor %}

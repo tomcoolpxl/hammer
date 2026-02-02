@@ -19,6 +19,9 @@ def test_file_{{ item.safe_name }}_on_{{ host }}(host_{{ host }}):
     f = host_{{ host }}.file("{{ item.path }}")
 {% if item.present %}
     assert f.exists, f"File {{ item.path }} should exist on {{ host }}"
+{% if item.is_directory %}
+    assert f.is_directory, f"{{ item.path }} should be a directory on {{ host }}"
+{% endif %}
 {% if item.mode %}
     assert f.mode == {{ item.mode }}, \
         f"File {{ item.path }} should have mode {{ item.mode }}, got {f.mode}"
@@ -31,9 +34,10 @@ def test_file_{{ item.safe_name }}_on_{{ host }}(host_{{ host }}):
     assert f.group == "{{ item.group }}", \
         f"File {{ item.path }} should have group {{ item.group }}, got {f.group}"
 {% endif %}
-{% if item.content_regex %}
-    assert f.contains("{{ item.content_regex }}"), \
-        f"File {{ item.path }} should contain pattern '{{ item.content_regex }}'"
+{% if item.content_regex and not item.is_directory %}
+    content_pattern = r"{{ item.content_regex }}"
+    assert f.contains(content_pattern), \
+        f"File {{ item.path }} should contain pattern matching regex"
 {% endif %}
 {% else %}
     assert not f.exists, f"File {{ item.path }} should not exist on {{ host }}"

@@ -4,8 +4,9 @@ This module orchestrates the generation of student and grading bundles
 from a validated spec and execution plan.
 """
 
+import shutil
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 from hammer.spec import HammerSpec
 from hammer.plan import ExecutionPlan, build_execution_plan
@@ -46,6 +47,7 @@ def build_assignment(
     spec: HammerSpec,
     output_dir: Path,
     box_version: str = "generic/alma9",
+    spec_dir: Optional[Path] = None,
 ) -> LockArtifact:
     """
     Build student and grading bundles from a spec.
@@ -59,6 +61,7 @@ def build_assignment(
         spec: Validated HAMMER spec
         output_dir: Root directory for output
         box_version: Vagrant box to use (default: generic/alma9)
+        spec_dir: Directory containing the spec file (for provided_files resolution)
 
     Returns:
         LockArtifact containing checksums and versions
@@ -78,7 +81,7 @@ def build_assignment(
     grading_dir = output_dir / "grading_bundle"
 
     # Build student bundle
-    _build_student_bundle(spec, plan, network, student_dir, box_version, checksums)
+    _build_student_bundle(spec, plan, network, student_dir, box_version, checksums, spec_dir)
 
     # Build grading bundle
     _build_grading_bundle(spec, plan, network, grading_dir, box_version, checksums)
@@ -100,6 +103,7 @@ def _build_student_bundle(
     output_dir: Path,
     box_version: str,
     checksums: Dict[str, str],
+    spec_dir: Optional[Path] = None,
 ) -> None:
     """Build the student bundle."""
     create_student_bundle_structure(output_dir)
@@ -142,6 +146,42 @@ def _build_student_bundle(
     with open(readme_path, "w") as f:
         f.write(readme_content)
     checksums["student_bundle/README.md"] = compute_file_checksum(readme_content)
+
+    # Copy provided_files if specified
+    if spec.entrypoints.provided_files and spec_dir:
+        _copy_provided_files(spec, spec_dir, output_dir, checksums)
+
+
+def _copy_provided_files(
+    spec: HammerSpec,
+    spec_dir: Path,
+    output_dir: Path,
+    checksums: Dict[str, str],
+) -> None:
+    """Copy provided_files from spec directory to student bundle."""
+    for pf in spec.entrypoints.provided_files:
+        src = spec_dir / pf.source
+        dst = output_dir / pf.destination
+
+        if not src.exists():
+            raise FileNotFoundError(
+                f"Provided file not found: {src} (source: {pf.source})"
+            )
+
+        # Create parent directories
+        dst.parent.mkdir(parents=True, exist_ok=True)
+
+        # Copy file or directory
+        if src.is_dir():
+            if dst.exists():
+                shutil.rmtree(dst)
+            shutil.copytree(src, dst)
+        else:
+            shutil.copy2(src, dst)
+            # Add checksum for file
+            with open(src, "r") as f:
+                content = f.read()
+            checksums[f"student_bundle/{pf.destination}"] = compute_file_checksum(content)
 
 
 def _build_grading_bundle(

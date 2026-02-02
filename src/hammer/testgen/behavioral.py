@@ -9,9 +9,12 @@ from typing import Any, Dict, List
 from hammer.plan import (
     PhaseContractPlan,
     PackageCheck,
+    PipPackageCheck,
     ServiceCheck,
+    UserCheck,
     FileCheck,
     FirewallCheck,
+    HttpEndpointCheck,
 )
 
 
@@ -38,6 +41,22 @@ def generate_package_tests(contract: PhaseContractPlan) -> List[Dict[str, Any]]:
     return tests
 
 
+def generate_pip_package_tests(contract: PhaseContractPlan) -> List[Dict[str, Any]]:
+    """Generate test data for pip package checks."""
+    tests = []
+
+    for pkg in contract.pip_packages:
+        tests.append({
+            "name": pkg.name,
+            "state": pkg.state,
+            "python": pkg.python,
+            "hosts": pkg.host_targets,
+            "weight": pkg.weight,
+        })
+
+    return tests
+
+
 def generate_service_tests(contract: PhaseContractPlan) -> List[Dict[str, Any]]:
     """Generate test data for service checks."""
     tests = []
@@ -49,6 +68,26 @@ def generate_service_tests(contract: PhaseContractPlan) -> List[Dict[str, Any]]:
             "running": svc.running,
             "hosts": svc.host_targets,
             "weight": svc.weight,
+        })
+
+    return tests
+
+
+def generate_user_tests(contract: PhaseContractPlan) -> List[Dict[str, Any]]:
+    """Generate test data for user checks."""
+    tests = []
+
+    for user in contract.users:
+        tests.append({
+            "name": user.name,
+            "exists": user.exists,
+            "uid": user.uid,
+            "gid": user.gid,
+            "home": user.home,
+            "shell": user.shell,
+            "groups": user.groups,
+            "hosts": user.host_targets,
+            "weight": user.weight,
         })
 
     return tests
@@ -77,6 +116,7 @@ def generate_file_tests(contract: PhaseContractPlan) -> List[Dict[str, Any]]:
                 "path": item["path"],
                 "safe_name": _make_safe_name(item["path"]),
                 "present": item["present"],
+                "is_directory": item.get("is_directory", False),
                 "mode": mode,
                 "owner": item.get("owner"),
                 "group": item.get("group"),
@@ -136,7 +176,28 @@ def generate_firewall_tests(
         tests.append({
             "hosts": fw.host_targets,
             "ports": ports,
+            "firewall_type": fw.firewall_type,
             "weight": fw.weight,
+        })
+
+    return tests
+
+
+def generate_http_endpoint_tests(contract: PhaseContractPlan) -> List[Dict[str, Any]]:
+    """Generate test data for HTTP endpoint checks."""
+    tests = []
+
+    for http in contract.http_endpoints:
+        tests.append({
+            "url": http.url,
+            "method": http.method,
+            "expected_status": http.expected_status,
+            "response_contains": http.response_contains,
+            "response_regex": http.response_regex,
+            "timeout_seconds": http.timeout_seconds,
+            "hosts": http.host_targets,
+            "safe_name": _make_safe_name(http.url),
+            "weight": http.weight,
         })
 
     return tests

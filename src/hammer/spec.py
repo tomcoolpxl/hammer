@@ -90,10 +90,17 @@ class Topology(BaseModel):
 # Entrypoints
 # -------------------------
 
+class ProvidedFile(BaseModel):
+    """A file provided by the assignment to students."""
+    source: NonEmptyStr  # Path relative to spec file
+    destination: NonEmptyStr  # Path in student bundle
+
+
 class Entrypoints(BaseModel):
     playbook_path: NonEmptyStr
     required_roles: Optional[List[NonEmptyStr]] = None
     required_files: Optional[List[NonEmptyStr]] = None
+    provided_files: Optional[List[ProvidedFile]] = None  # Files given to students
 
 
 # -------------------------
@@ -240,10 +247,32 @@ class PackageContract(BaseModel):
     weight: float = Field(default=1.0, ge=0.0)
 
 
+class PipPackageContract(BaseModel):
+    """Contract for verifying pip packages are installed."""
+    name: NonEmptyStr
+    state: Literal["present", "absent"] = "present"
+    python: Optional[NonEmptyStr] = None  # Python executable, defaults to system python3
+    node_selector: NodeSelector
+    weight: float = Field(default=1.0, ge=0.0)
+
+
 class ServiceContract(BaseModel):
     name: NonEmptyStr
     enabled: bool
     running: bool
+    node_selector: NodeSelector
+    weight: float = Field(default=1.0, ge=0.0)
+
+
+class UserContract(BaseModel):
+    """Contract for verifying system users exist with specified properties."""
+    name: NonEmptyStr
+    exists: bool = True
+    uid: Optional[int] = None
+    gid: Optional[int] = None
+    home: Optional[NonEmptyStr] = None
+    shell: Optional[NonEmptyStr] = None
+    groups: Optional[List[NonEmptyStr]] = None  # Supplementary groups
     node_selector: NodeSelector
     weight: float = Field(default=1.0, ge=0.0)
 
@@ -261,19 +290,24 @@ class FirewallPort(BaseModel):
     zone: NonEmptyStr
 
 
+FirewallType = Literal["firewalld", "iptables"]
+
+
 class FirewallContract(BaseModel):
     open_ports: List[FirewallPort]
     node_selector: NodeSelector
+    firewall_type: FirewallType = "firewalld"  # firewalld or iptables
     weight: float = Field(default=1.0, ge=0.0)
 
 
 class FileContractItem(BaseModel):
     path: NonEmptyStr
     present: bool
+    is_directory: bool = False  # True if path should be a directory
     mode: Optional[NonEmptyStr] = None
     owner: Optional[NonEmptyStr] = None
     group: Optional[NonEmptyStr] = None
-    content_regex: Optional[NonEmptyStr] = None
+    content_regex: Optional[NonEmptyStr] = None  # Only for files, not directories
 
 
 class FilesContract(BaseModel):
@@ -291,12 +325,27 @@ class ReachabilityContract(BaseModel):
     weight: float = Field(default=1.0, ge=0.0)
 
 
+class HttpEndpointContract(BaseModel):
+    """Contract for verifying HTTP endpoints return expected responses."""
+    url: NonEmptyStr  # URL to test, can include {{ variable }} references
+    method: Literal["GET", "POST", "PUT", "DELETE", "HEAD"] = "GET"
+    expected_status: int = Field(default=200, ge=100, le=599)
+    response_contains: Optional[NonEmptyStr] = None  # Substring to find in response
+    response_regex: Optional[NonEmptyStr] = None  # Regex pattern to match
+    timeout_seconds: int = Field(default=5, ge=1, le=60)
+    node_selector: NodeSelector  # Which node to run the test from
+    weight: float = Field(default=1.0, ge=0.0)
+
+
 class BehavioralContracts(BaseModel):
     packages: Optional[List[PackageContract]] = None
+    pip_packages: Optional[List[PipPackageContract]] = None
     services: Optional[List[ServiceContract]] = None
+    users: Optional[List[UserContract]] = None
     firewall: Optional[List[FirewallContract]] = None
     files: Optional[List[FilesContract]] = None
     reachability: Optional[List[ReachabilityContract]] = None
+    http_endpoints: Optional[List[HttpEndpointContract]] = None
 
 
 # -------------------------
@@ -513,9 +562,12 @@ class HammerSpec(BaseModel):
         all_bcs: List[Any] = []
         if self.behavioral_contracts:
             all_bcs.extend(self.behavioral_contracts.packages or [])
+            all_bcs.extend(self.behavioral_contracts.pip_packages or [])
             all_bcs.extend(self.behavioral_contracts.services or [])
+            all_bcs.extend(self.behavioral_contracts.users or [])
             all_bcs.extend(self.behavioral_contracts.firewall or [])
             all_bcs.extend(self.behavioral_contracts.files or [])
+            all_bcs.extend(self.behavioral_contracts.http_endpoints or [])
         
         for bc in all_bcs:
             check_selector(bc.node_selector)

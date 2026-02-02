@@ -1,0 +1,12 @@
+[Unit]
+Description=Pyramid Python Application
+After=network.target
+
+[Service]
+User={{ app_user | default('vagrant') }}
+WorkingDirectory=/opt/pyramid_app
+ExecStart=/usr/bin/python3 /opt/pyramid_app/app.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

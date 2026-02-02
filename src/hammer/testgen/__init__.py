@@ -14,9 +14,12 @@ from hammer.builder.network import NetworkPlan
 from hammer.testgen.bindings import generate_binding_tests
 from hammer.testgen.behavioral import (
     generate_package_tests,
+    generate_pip_package_tests,
     generate_service_tests,
+    generate_user_tests,
     generate_file_tests,
     generate_firewall_tests,
+    generate_http_endpoint_tests,
 )
 from hammer.testgen.reachability import generate_reachability_tests
 
@@ -146,6 +149,18 @@ def _generate_phase_tests(
         path.write_text(content)
         generated_files.append(path)
 
+    # Pip package tests
+    pip_package_tests = generate_pip_package_tests(contract)
+    if pip_package_tests:
+        content = env.get_template("test_pip_packages.py.j2").render(
+            assignment_id=spec.assignment_id,
+            phase=phase,
+            tests=pip_package_tests,
+        )
+        path = phase_dir / "test_pip_packages.py"
+        path.write_text(content)
+        generated_files.append(path)
+
     # Service tests
     service_tests = generate_service_tests(contract)
     if service_tests:
@@ -155,6 +170,18 @@ def _generate_phase_tests(
             tests=service_tests,
         )
         path = phase_dir / "test_services.py"
+        path.write_text(content)
+        generated_files.append(path)
+
+    # User tests
+    user_tests = generate_user_tests(contract)
+    if user_tests:
+        content = env.get_template("test_users.py.j2").render(
+            assignment_id=spec.assignment_id,
+            phase=phase,
+            tests=user_tests,
+        )
+        path = phase_dir / "test_users.py"
         path.write_text(content)
         generated_files.append(path)
 
@@ -191,6 +218,18 @@ def _generate_phase_tests(
             tests=reachability_tests,
         )
         path = phase_dir / "test_reachability.py"
+        path.write_text(content)
+        generated_files.append(path)
+
+    # HTTP endpoint tests
+    http_endpoint_tests = generate_http_endpoint_tests(contract)
+    if http_endpoint_tests:
+        content = env.get_template("test_http.py.j2").render(
+            assignment_id=spec.assignment_id,
+            phase=phase,
+            tests=http_endpoint_tests,
+        )
+        path = phase_dir / "test_http.py"
         path.write_text(content)
         generated_files.append(path)
 

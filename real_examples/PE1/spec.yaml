@@ -1,0 +1,199 @@
+# PE1 Pyramid Web Application Assignment
+# HAMMER Spec for automated grading
+
+assignment_id: "pe1-pyramid-app"
+assignment_version: "2026.02"
+spec_version: "1.0"
+seed: 42
+provider: "libvirt"
+os: "almalinux9"
+
+features:
+  vault: false
+  selinux: false
+  handlers: false      # PE1 doesn't require handler testing
+  reachability: false  # Single node, no inter-node connectivity needed
+
+topology:
+  nodes:
+    - name: "web1"
+      groups: ["web"]
+      resources:
+        cpu: 2
+        ram_mb: 2048
+  forwarded_ports:
+    - host_port: 6000
+      guest_port: 6000
+      protocol: tcp
+
+entrypoints:
+  playbook_path: "playbook.yaml"
+  required_files:
+    - "playbook.yaml"
+  provided_files:
+    - source: "app.py"
+      destination: "files/app.py"
+    - source: "app.service.j2"
+      destination: "templates/app.service.j2"
+
+# Minimal variable contract required by HAMMER
+# PE1 doesn't have variable mutation requirements, but we need at least one
+variable_contracts:
+  - name: "app_port"
+    type: "int"
+    defaults:
+      student: 6000
+    allowed_values: [6000, 7000]
+    grading_overlay_targets:
+      - overlay_kind: "group_vars"
+        target_name: "web"
+    binding_targets:
+      - type: "service_listen_port"
+        weight: 1.0
+        target:
+          service: "python3"
+          protocol: "tcp"
+          address: "0.0.0.0"
+
+behavioral_contracts:
+  # ===================
+  # BASIC (50%)
+  # ===================
+
+  # System packages
+  packages:
+    - name: "python3"
+      state: "present"
+      node_selector: { group: "web" }
+      weight: 2.0
+    - name: "python3-pip"
+      state: "present"
+      node_selector: { group: "web" }
+      weight: 2.0
+    # Extra 1: iptables
+    - name: "iptables-services"
+      state: "present"
+      node_selector: { group: "web" }
+      weight: 2.0
+
+  # Pip packages for the pyramid app
+  pip_packages:
+    - name: "pyramid"
+      state: "present"
+      node_selector: { group: "web" }
+      weight: 2.0
+    - name: "waitress"
+      state: "present"
+      node_selector: { group: "web" }
+      weight: 2.0
+    - name: "psutil"
+      state: "present"
+      node_selector: { group: "web" }
+      weight: 2.0
+    - name: "distro"
+      state: "present"
+      node_selector: { group: "web" }
+      weight: 2.0
+
+  # File structure
+  files:
+    # App directory
+    - items:
+        - path: "/opt/pyramid_app"
+          present: true
+          is_directory: true
+      node_selector: { group: "web" }
+      weight: 2.0
+    # App file deployed
+    - items:
+        - path: "/opt/pyramid_app/app.py"
+          present: true
+      node_selector: { group: "web" }
+      weight: 3.0
+    # Extra 2: systemd unit file
+    - items:
+        - path: "/etc/systemd/system/app.service"
+          present: true
+          content_regex: "ExecStart=.*python3.*app\\.py"
+      node_selector: { group: "web" }
+      weight: 3.0
+    # Extra 3: ownership by app_user
+    - items:
+        - path: "/opt/pyramid_app"
+          present: true
+          is_directory: true
+          owner: "app_user"
+          group: "app_user"
+        - path: "/opt/pyramid_app/app.py"
+          present: true
+          owner: "app_user"
+          group: "app_user"
+      node_selector: { group: "web" }
+      weight: 3.0
+
+  # Services
+  services:
+    # Extra 1: iptables service
+    - name: "iptables"
+      enabled: true
+      running: true
+      node_selector: { group: "web" }
+      weight: 2.0
+    # Extra 2: app service (systemd)
+    - name: "app"
+      enabled: true
+      running: true
+      node_selector: { group: "web" }
+      weight: 3.0
+
+  # Extra 1: iptables firewall
+  firewall:
+    - open_ports:
+        - port: 6000
+          protocol: "tcp"
+          zone: "public"  # Not used for iptables but required by schema
+      firewall_type: "iptables"
+      node_selector: { group: "web" }
+      weight: 4.0
+
+  # Extra 3: user exists
+  users:
+    - name: "app_user"
+      exists: true
+      node_selector: { group: "web" }
+      weight: 3.0
+
+  # HTTP endpoint test - verifies app is accessible
+  http_endpoints:
+    - url: "http://localhost:6000/hostname"
+      method: "GET"
+      expected_status: 200
+      response_contains: "Hostname:"
+      timeout_seconds: 10
+      node_selector: { host: "web1" }
+      weight: 5.0
+
+idempotence:
+  required: true
+  allowed_changes:
+    - "Start app"              # nohup shell command allowed to be non-idempotent
+    - "Open port 6000 in iptables"  # iptables insert is non-idempotent
+  enforcement:
+    require_changed_zero: false  # Allow specific non-idempotent tasks
+    require_no_handlers: true
+
+phase_overlays:
+  baseline:
+    group_vars:
+      web:
+        app_port: 6000
+    host_vars: {}
+    inventory_vars: {}
+    extra_vars: {}
+  mutation:
+    group_vars:
+      web:
+        app_port: 7000
+    host_vars: {}
+    inventory_vars: {}
+    extra_vars: {}

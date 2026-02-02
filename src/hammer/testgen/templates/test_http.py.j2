@@ -1,0 +1,50 @@
+"""HAMMER Generated HTTP Endpoint Tests.
+
+Assignment: {{ assignment_id }}
+Phase: {{ phase }}
+
+Tests that verify HTTP endpoints respond correctly.
+"""
+
+import pytest
+import re
+
+
+{% for test in tests %}
+{% for host in test.hosts %}
+@pytest.mark.{{ phase }}
+@pytest.mark.weight({{ test.weight }})
+def test_http_{{ test.safe_name }}_on_{{ host }}(host_{{ host }}):
+    """Verify HTTP {{ test.method }} {{ test.url }} returns {{ test.expected_status }} on {{ host }}."""
+    # Use curl to test HTTP endpoint
+    cmd = host_{{ host }}.run(
+        "curl -s -o /tmp/hammer_http_response -w '%%{http_code}' "
+        "-X {{ test.method }} "
+        "--connect-timeout {{ test.timeout_seconds }} "
+        "'{{ test.url }}'"
+    )
+
+    assert cmd.rc == 0, f"curl command failed on {{ host }}: {cmd.stderr}"
+
+    status_code = int(cmd.stdout.strip())
+    assert status_code == {{ test.expected_status }}, \
+        f"Expected status {{ test.expected_status }}, got {status_code} for {{ test.url }} on {{ host }}"
+{% if test.response_contains is not none %}
+
+    # Check response body contains expected substring
+    body_cmd = host_{{ host }}.run("cat /tmp/hammer_http_response")
+    assert "{{ test.response_contains }}" in body_cmd.stdout, \
+        f"Response body should contain '{{ test.response_contains }}' on {{ host }}"
+{% endif %}
+{% if test.response_regex is not none %}
+
+    # Check response body matches regex pattern
+    body_cmd = host_{{ host }}.run("cat /tmp/hammer_http_response")
+    pattern = r"{{ test.response_regex }}"
+    assert re.search(pattern, body_cmd.stdout), \
+        f"Response body should match pattern '{pattern}' on {{ host }}"
+{% endif %}
+
+
+{% endfor %}
+{% endfor %}
