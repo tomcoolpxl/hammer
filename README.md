@@ -12,6 +12,7 @@ HAMMER is an automated grading system for Ansible assignments. It validates stud
 - **Behavioral contracts**: Verify packages, services, files, firewall rules, and network reachability
 - **Deterministic builds**: Same spec + seed produces identical test environments
 - **Detailed reporting**: JSON and human-readable grade reports
+- **Rich CLI output**: Colored output with tables and progress indicators
 
 ## Requirements
 

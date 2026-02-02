@@ -523,6 +523,79 @@ class HammerSpec(BaseModel):
         for hc in self.handler_contracts or []:
             check_selector(hc.node_selector)
 
+        # Validate overlay target references
+        for var in self.variable_contracts:
+            for target in var.grading_overlay_targets:
+                if target.overlay_kind == "group_vars":
+                    if target.target_name not in group_names and target.target_name != "all":
+                        raise ValueError(
+                            f"Variable '{var.name}' overlay targets unknown group '{target.target_name}'"
+                        )
+                elif target.overlay_kind == "host_vars":
+                    if target.target_name not in node_names:
+                        raise ValueError(
+                            f"Variable '{var.name}' overlay targets unknown host '{target.target_name}'"
+                        )
+
+        # Validate PortRefVar references in behavioral contracts
+        def check_port_ref(port_ref: PortRef, context: str) -> None:
+            if isinstance(port_ref, PortRefVar):
+                if port_ref.var not in var_names:
+                    raise ValueError(
+                        f"{context}: references undefined variable '{port_ref.var}'"
+                    )
+            elif isinstance(port_ref, dict) and "var" in port_ref:
+                if port_ref["var"] not in var_names:
+                    raise ValueError(
+                        f"{context}: references undefined variable '{port_ref['var']}'"
+                    )
+
+        if self.behavioral_contracts:
+            # Check firewall port references
+            for fw in self.behavioral_contracts.firewall or []:
+                for port_spec in fw.open_ports:
+                    check_port_ref(port_spec.port, "Firewall contract")
+
+            # Check reachability port and host references
+            for reach in self.behavioral_contracts.reachability or []:
+                check_port_ref(reach.port, "Reachability contract")
+                if reach.from_host not in node_names:
+                    raise ValueError(
+                        f"Reachability contract references unknown from_host '{reach.from_host}'"
+                    )
+                if reach.to_host not in node_names:
+                    raise ValueError(
+                        f"Reachability contract references unknown to_host '{reach.to_host}'"
+                    )
+
+        # Validate topology dependency references
+        if self.topology.dependencies:
+            for dep in self.topology.dependencies:
+                if dep.from_host not in node_names:
+                    raise ValueError(
+                        f"Dependency references unknown from_host '{dep.from_host}'"
+                    )
+                if dep.to_host not in node_names:
+                    raise ValueError(
+                        f"Dependency references unknown to_host '{dep.to_host}'"
+                    )
+
+        # Validate handler trigger variable references
+        for hc in self.handler_contracts or []:
+            for trigger in hc.trigger_conditions:
+                if isinstance(trigger, TriggerVariableChanged):
+                    if trigger.variable_changed not in var_names:
+                        raise ValueError(
+                            f"Handler '{hc.handler_name}' trigger references "
+                            f"undefined variable '{trigger.variable_changed}'"
+                        )
+                elif hasattr(trigger, "variable_changed"):
+                    if trigger.variable_changed not in var_names:
+                        raise ValueError(
+                            f"Handler '{hc.handler_name}' trigger references "
+                            f"undefined variable '{trigger.variable_changed}'"
+                        )
+
         return self
 
 def load_spec_from_file(path: Path) -> HammerSpec:

@@ -12,6 +12,7 @@ dependencies = [
     "ansible-runner>=2.3.0",
     "pytest-json-report>=1.5.0",
     "paramiko>=3.0.0",
+    "rich>=13.0.0",
 ]
 
 [project.optional-dependencies]

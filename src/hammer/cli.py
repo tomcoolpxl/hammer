@@ -2,7 +2,17 @@ import argparse
 import sys
 from pathlib import Path
 from pydantic import ValidationError
+
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich import box
+
 from hammer.spec import load_spec_from_file
+
+
+console = Console()
 
 
 def main():
@@ -78,17 +88,25 @@ def main():
 def _cmd_validate(args):
     """Handle the validate subcommand."""
     try:
-        print(f"Validating {args.spec}...")
-        spec = load_spec_from_file(args.spec)
-        print("Spec is valid!")
-        print(f"Assignment ID: {spec.assignment_id}")
-        print(f"Nodes: {[n.name for n in spec.topology.nodes]}")
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+            transient=True,
+        ) as progress:
+            progress.add_task(description=f"Validating {args.spec}...", total=None)
+            spec = load_spec_from_file(args.spec)
+
+        console.print("[green]Spec is valid![/green]")
+        console.print(f"  Assignment ID: [cyan]{spec.assignment_id}[/cyan]")
+        console.print(f"  Nodes: [cyan]{[n.name for n in spec.topology.nodes]}[/cyan]")
+
     except ValidationError as e:
-        print("Validation Error:")
-        print(e)
+        console.print("[red]Validation Error:[/red]")
+        console.print(str(e))
         sys.exit(1)
     except Exception as e:
-        print(f"Error: {e}")
+        console.print(f"[red]Error:[/red] {e}")
         sys.exit(1)
 
 
@@ -97,29 +115,35 @@ def _cmd_build(args):
     from hammer.builder import build_assignment
 
     try:
-        print(f"Loading spec from {args.spec}...")
-        spec = load_spec_from_file(args.spec)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+            transient=True,
+        ) as progress:
+            task = progress.add_task(description="Loading spec...", total=None)
+            spec = load_spec_from_file(args.spec)
 
-        print(f"Building assignment bundles in {args.out}...")
-        lock = build_assignment(
-            spec=spec,
-            output_dir=args.out,
-            box_version=args.box_version,
-        )
+            progress.update(task, description="Building assignment bundles...")
+            lock = build_assignment(
+                spec=spec,
+                output_dir=args.out,
+                box_version=args.box_version,
+            )
 
-        print("Build complete!")
-        print(f"  Student bundle: {args.out / 'student_bundle'}")
-        print(f"  Grading bundle: {args.out / 'grading_bundle'}")
-        print(f"  Lock file: {args.out / 'lock.json'}")
-        print(f"  Spec hash: {lock.spec_hash[:16]}...")
-        print(f"  Network: {lock.resolved_network.cidr}")
+        console.print("[green]Build complete![/green]")
+        console.print(f"  Student bundle: [cyan]{args.out / 'student_bundle'}[/cyan]")
+        console.print(f"  Grading bundle: [cyan]{args.out / 'grading_bundle'}[/cyan]")
+        console.print(f"  Lock file: [cyan]{args.out / 'lock.json'}[/cyan]")
+        console.print(f"  Spec hash: [dim]{lock.spec_hash[:16]}...[/dim]")
+        console.print(f"  Network: [cyan]{lock.resolved_network.cidr}[/cyan]")
 
     except ValidationError as e:
-        print("Validation Error:")
-        print(e)
+        console.print("[red]Validation Error:[/red]")
+        console.print(str(e))
         sys.exit(1)
     except Exception as e:
-        print(f"Error: {e}")
+        console.print(f"[red]Error:[/red] {e}")
         sys.exit(1)
 
 
@@ -128,11 +152,18 @@ def _cmd_grade(args):
     from hammer.runner import grade_assignment
 
     try:
-        print(f"Loading spec from {args.spec}...")
-        spec = load_spec_from_file(args.spec)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+            transient=True,
+        ) as progress:
+            task = progress.add_task(description="Loading spec...", total=None)
+            spec = load_spec_from_file(args.spec)
+            progress.update(task, description="Grading student submission...")
 
-        print(f"Grading student submission from {args.student_repo}...")
-        print(f"Results will be written to {args.out}")
+        console.print(f"Grading [cyan]{args.student_repo}[/cyan]")
+        console.print(f"Results: [cyan]{args.out}[/cyan]\n")
 
         # Determine phases to run
         phases = args.phase if args.phase else None
@@ -147,37 +178,94 @@ def _cmd_grade(args):
             verbose=args.verbose,
         )
 
-        print("\n" + "=" * 60)
-        print("GRADING COMPLETE")
-        print("=" * 60)
-        print(f"Assignment: {report.assignment_id}")
-        print(f"Overall: {'PASS' if report.success else 'FAIL'}")
-        print()
+        # Create results table
+        table = Table(
+            title="Grading Results",
+            box=box.ROUNDED,
+            show_header=True,
+            header_style="bold",
+        )
+        table.add_column("Phase", style="cyan")
+        table.add_column("Converge", justify="center")
+        table.add_column("Tests", justify="center")
+        table.add_column("Score", justify="right")
 
         for phase_name, phase_result in report.phases.items():
-            status = "PASS" if phase_result.converge.success else "FAIL"
-            print(f"  {phase_name}: {status}")
-            print(f"    Converge: ok={phase_result.converge.ok}, "
-                  f"changed={phase_result.converge.changed}, "
-                  f"failed={phase_result.converge.failed}")
-            print(f"    Tests: {phase_result.tests.passed} passed, "
-                  f"{phase_result.tests.failed} failed")
-            print(f"    Score: {phase_result.score:.1f} / {phase_result.max_score:.1f}")
+            # Converge status
+            if phase_result.converge.success:
+                converge_status = "[green]PASS[/green]"
+            else:
+                converge_status = "[red]FAIL[/red]"
 
-        print()
-        print(f"Total Score: {report.total_score:.1f} / {report.max_score:.1f} "
-              f"({report.percentage:.1f}%)")
-        print(f"\nDetailed report: {args.out / 'results' / 'report.json'}")
+            converge_details = (
+                f"{converge_status}\n"
+                f"[dim]ok={phase_result.converge.ok} "
+                f"changed={phase_result.converge.changed} "
+                f"failed={phase_result.converge.failed}[/dim]"
+            )
+
+            # Tests status
+            if phase_result.tests.failed == 0:
+                tests_status = f"[green]{phase_result.tests.passed} passed[/green]"
+            else:
+                tests_status = (
+                    f"[green]{phase_result.tests.passed} passed[/green], "
+                    f"[red]{phase_result.tests.failed} failed[/red]"
+                )
+
+            # Score
+            score_pct = (phase_result.score / phase_result.max_score * 100
+                        if phase_result.max_score > 0 else 0)
+            if score_pct >= 90:
+                score_style = "green"
+            elif score_pct >= 70:
+                score_style = "yellow"
+            else:
+                score_style = "red"
+
+            score_text = (
+                f"[{score_style}]{phase_result.score:.1f}[/{score_style}] / "
+                f"{phase_result.max_score:.1f}"
+            )
+
+            table.add_row(
+                phase_name.upper(),
+                converge_details,
+                tests_status,
+                score_text,
+            )
+
+        console.print(table)
+
+        # Summary panel
+        overall_status = "[green]PASS[/green]" if report.success else "[red]FAIL[/red]"
+        score_pct = report.percentage
+        if score_pct >= 90:
+            score_style = "green"
+        elif score_pct >= 70:
+            score_style = "yellow"
+        else:
+            score_style = "red"
+
+        summary = (
+            f"Assignment: [cyan]{report.assignment_id}[/cyan]\n"
+            f"Overall: {overall_status}\n"
+            f"Total Score: [{score_style}]{report.total_score:.1f}[/{score_style}] / "
+            f"{report.max_score:.1f} ([{score_style}]{report.percentage:.1f}%[/{score_style}])\n\n"
+            f"Detailed report: [dim]{args.out / 'results' / 'report.json'}[/dim]"
+        )
+
+        console.print(Panel(summary, title="Summary", box=box.ROUNDED))
 
         if not report.success:
             sys.exit(1)
 
     except ValidationError as e:
-        print("Validation Error:")
-        print(e)
+        console.print("[red]Validation Error:[/red]")
+        console.print(str(e))
         sys.exit(1)
     except Exception as e:
-        print(f"Error: {e}")
+        console.print(f"[red]Error:[/red] {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
