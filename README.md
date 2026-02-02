@@ -216,7 +216,7 @@ See `tests/fixtures/valid_full.yaml` for a complete example.
 
 ## Project Structure
 
-```
+```bash
 hammer/
 ├── src/hammer/
 │   ├── spec.py          # Pydantic models for spec validation
