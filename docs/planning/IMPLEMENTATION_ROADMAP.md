@@ -81,7 +81,7 @@ This document outlines the phased implementation plan for the HAMMER project. Th
 *   [x] Integrate `ansible-runner` to run playbooks programmatically.
 *   [x] Implement snapshot extraction playbook generation.
 *   [x] Implement `hammer grade` CLI command.
-*   [ ] **Integration Test:** Run a full grading cycle on the "Reference Example" spec.
+*   [x] **Integration Test:** Run a full grading cycle on the "Reference Example" spec.
 
 ## Phase 6: Refinement & Regression Suite
 **Goal:** Robustness and edge-case handling.
@@ -95,4 +95,4 @@ This document outlines the phased implementation plan for the HAMMER project. Th
 
 ---
 
-**Next Immediate Action:** Proceed to Phase 1 setup.
+**Next Immediate Action:** Proceed to Phase 6 refinement and regression testing.
