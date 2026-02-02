@@ -12,6 +12,7 @@ import pytest
 {% for test in tests %}
 {% for host in test.hosts %}
 @pytest.mark.{{ phase }}
+@pytest.mark.weight({{ test.weight }})
 def test_package_{{ test.name }}_{{ test.state }}_on_{{ host }}(host_{{ host }}):
     """Verify package {{ test.name }} is {{ test.state }} on {{ host }}."""
     pkg = host_{{ host }}.package("{{ test.name }}")

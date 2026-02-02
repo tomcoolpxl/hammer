@@ -15,6 +15,16 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "baseline: tests for baseline phase")
     config.addinivalue_line("markers", "mutation: tests for mutation phase")
     config.addinivalue_line("markers", "idempotence: tests for idempotence phase")
+    config.addinivalue_line("markers", "weight(val): weight for scoring")
+
+
+def pytest_json_runtest_metadata(item):
+    """Add weight marker to json report metadata."""
+    metadata = {}
+    for mark in item.iter_markers(name="weight"):
+        if mark.args:
+            metadata["weight"] = mark.args[0]
+    return metadata
 
 
 @pytest.fixture(scope="module")

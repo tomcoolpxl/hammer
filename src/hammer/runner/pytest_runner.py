@@ -117,9 +117,9 @@ def parse_pytest_json(report_file: Path) -> TestResult:
                 if longrepr:
                     message = str(longrepr)[:200]
 
-        # Default weight is 1.0 per test
-        # TODO: Extract actual weights from test metadata
-        weight = 1.0
+        # Extract weight from metadata if present, fallback to 1.0
+        metadata = test.get("metadata", {})
+        weight = float(metadata.get("weight", 1.0))
         total_weight += weight
 
         if outcome == "passed":

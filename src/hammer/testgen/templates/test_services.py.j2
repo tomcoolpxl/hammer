@@ -12,6 +12,7 @@ import pytest
 {% for test in tests %}
 {% for host in test.hosts %}
 @pytest.mark.{{ phase }}
+@pytest.mark.weight({{ test.weight }})
 def test_service_{{ test.name }}_on_{{ host }}(host_{{ host }}):
     """Verify service {{ test.name }} state on {{ host }}."""
     svc = host_{{ host }}.service("{{ test.name }}")

@@ -13,6 +13,7 @@ import pytest
 {% for host in test.hosts %}
 {% for item in test.file_items %}
 @pytest.mark.{{ phase }}
+@pytest.mark.weight({{ test.weight }})
 def test_file_{{ item.safe_name }}_on_{{ host }}(host_{{ host }}):
     """Verify file {{ item.path }} on {{ host }}."""
     f = host_{{ host }}.file("{{ item.path }}")

@@ -11,6 +11,7 @@ import pytest
 
 {% for test in tests %}
 @pytest.mark.{{ phase }}
+@pytest.mark.weight({{ test.weight }})
 def test_{{ test.test_name }}(host_{{ test.host }}):
     """{{ test.description }}"""
 {% if test.binding_type == "service_listen_port" %}

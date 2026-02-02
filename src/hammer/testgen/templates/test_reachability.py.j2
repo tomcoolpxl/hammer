@@ -12,6 +12,7 @@ from conftest import NETWORK
 
 {% for test in tests %}
 @pytest.mark.{{ phase }}
+@pytest.mark.weight({{ test.weight }})
 def test_{{ test.from_host }}_can{% if test.expectation == "not_reachable" %}not{% endif %}_reach_{{ test.to_host }}_port_{{ test.port }}(host_{{ test.from_host }}):
     """Verify {{ test.from_host }} {% if test.expectation == "not_reachable" %}cannot{% else %}can{% endif %} reach {{ test.to_host }} on port {{ test.port }}/{{ test.protocol }}."""
     target_ip = NETWORK["{{ test.to_host }}"]
