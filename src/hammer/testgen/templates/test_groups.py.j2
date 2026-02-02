@@ -1,0 +1,30 @@
+"""HAMMER Generated Group Tests.
+
+Assignment: {{ assignment_id }}
+Phase: {{ phase }}
+
+Tests that verify system groups exist with correct properties.
+"""
+
+import pytest
+
+
+{% for test in tests %}
+{% for host in test.hosts %}
+@pytest.mark.{{ phase }}
+@pytest.mark.weight({{ test.weight }})
+def test_group_{{ test.name }}_on_{{ host }}(host_{{ host }}):
+    """Verify group {{ test.name }} {{ "exists" if test.exists else "does not exist" }} on {{ host }}."""
+    group = host_{{ host }}.group("{{ test.name }}")
+{% if test.exists %}
+    assert group.exists, f"Group {{ test.name }} should exist on {{ host }}"
+{% if test.gid is not none %}
+    assert group.gid == {{ test.gid }}, f"Group {{ test.name }} should have GID {{ test.gid }} on {{ host }}"
+{% endif %}
+{% else %}
+    assert not group.exists, f"Group {{ test.name }} should not exist on {{ host }}"
+{% endif %}
+
+
+{% endfor %}
+{% endfor %}

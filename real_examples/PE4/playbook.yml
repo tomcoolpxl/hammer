@@ -1,0 +1,6 @@
+# Main playbook
+- name: Exam
+  hosts: all
+  become: true
+  roles:
+  - pxl_exam_role

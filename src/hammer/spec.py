@@ -277,6 +277,15 @@ class UserContract(BaseModel):
     weight: float = Field(default=1.0, ge=0.0)
 
 
+class GroupContract(BaseModel):
+    """Contract for verifying system groups exist with specified properties."""
+    name: NonEmptyStr
+    exists: bool = True
+    gid: Optional[int] = None
+    node_selector: NodeSelector
+    weight: float = Field(default=1.0, ge=0.0)
+
+
 class PortRefVar(BaseModel):
     var: NonEmptyStr
 
@@ -342,6 +351,7 @@ class BehavioralContracts(BaseModel):
     pip_packages: Optional[List[PipPackageContract]] = None
     services: Optional[List[ServiceContract]] = None
     users: Optional[List[UserContract]] = None
+    groups: Optional[List[GroupContract]] = None
     firewall: Optional[List[FirewallContract]] = None
     files: Optional[List[FilesContract]] = None
     reachability: Optional[List[ReachabilityContract]] = None
@@ -565,6 +575,7 @@ class HammerSpec(BaseModel):
             all_bcs.extend(self.behavioral_contracts.pip_packages or [])
             all_bcs.extend(self.behavioral_contracts.services or [])
             all_bcs.extend(self.behavioral_contracts.users or [])
+            all_bcs.extend(self.behavioral_contracts.groups or [])
             all_bcs.extend(self.behavioral_contracts.firewall or [])
             all_bcs.extend(self.behavioral_contracts.files or [])
             all_bcs.extend(self.behavioral_contracts.http_endpoints or [])

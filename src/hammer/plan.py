@@ -82,6 +82,14 @@ class UserCheck(BaseModel):
     weight: float
 
 
+class GroupCheck(BaseModel):
+    host_targets: List[str]
+    name: str
+    exists: bool
+    gid: int | None
+    weight: float
+
+
 class FirewallCheck(BaseModel):
     host_targets: List[str]
     ports: List[Dict[str, Any]]
@@ -144,6 +152,7 @@ class PhaseContractPlan(BaseModel):
     pip_packages: List[PipPackageCheck]
     services: List[ServiceCheck]
     users: List[UserCheck]
+    groups: List[GroupCheck]
     firewall: List[FirewallCheck]
     files: List[FileCheck]
     reachability: List[ReachabilityCheck]
@@ -282,6 +291,7 @@ class BehavioralChecks(BaseModel):
     pip_packages: List[PipPackageCheck]
     services: List[ServiceCheck]
     users: List[UserCheck]
+    groups: List[GroupCheck]
     firewall: List[FirewallCheck]
     files: List[FileCheck]
     reachability: List[ReachabilityCheck]
@@ -294,6 +304,7 @@ def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> BehavioralC
     pip_packages: List[PipPackageCheck] = []
     services: List[ServiceCheck] = []
     users: List[UserCheck] = []
+    groups: List[GroupCheck] = []
     firewall: List[FirewallCheck] = []
     files: List[FileCheck] = []
     reachability: List[ReachabilityCheck] = []
@@ -306,6 +317,7 @@ def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> BehavioralC
             pip_packages=pip_packages,
             services=services,
             users=users,
+            groups=groups,
             firewall=firewall,
             files=files,
             reachability=reachability,
@@ -363,6 +375,18 @@ def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> BehavioralC
                 )
             )
 
+    if bc.groups:
+        for g in bc.groups:
+            groups.append(
+                GroupCheck(
+                    host_targets=resolve_node_selector(g.node_selector, topology),
+                    name=g.name,
+                    exists=g.exists,
+                    gid=g.gid,
+                    weight=g.weight,
+                )
+            )
+
     if bc.firewall:
         for f in bc.firewall:
             firewall.append(
@@ -417,6 +441,7 @@ def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> BehavioralC
         pip_packages=pip_packages,
         services=services,
         users=users,
+        groups=groups,
         firewall=firewall,
         files=files,
         reachability=reachability,
@@ -479,6 +504,7 @@ def build_phase_contract_plan(spec: HammerSpec, topology: Topology, phase_name: 
         pip_packages=behavioral.pip_packages,
         services=behavioral.services,
         users=behavioral.users,
+        groups=behavioral.groups,
         firewall=behavioral.firewall,
         files=behavioral.files,
         reachability=behavioral.reachability,

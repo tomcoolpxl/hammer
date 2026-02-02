@@ -12,6 +12,7 @@ from hammer.plan import (
     PipPackageCheck,
     ServiceCheck,
     UserCheck,
+    GroupCheck,
     FileCheck,
     FirewallCheck,
     HttpEndpointCheck,
@@ -88,6 +89,22 @@ def generate_user_tests(contract: PhaseContractPlan) -> List[Dict[str, Any]]:
             "groups": user.groups,
             "hosts": user.host_targets,
             "weight": user.weight,
+        })
+
+    return tests
+
+
+def generate_group_tests(contract: PhaseContractPlan) -> List[Dict[str, Any]]:
+    """Generate test data for group checks."""
+    tests = []
+
+    for group in contract.groups:
+        tests.append({
+            "name": group.name,
+            "exists": group.exists,
+            "gid": group.gid,
+            "hosts": group.host_targets,
+            "weight": group.weight,
         })
 
     return tests

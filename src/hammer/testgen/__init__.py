@@ -17,6 +17,7 @@ from hammer.testgen.behavioral import (
     generate_pip_package_tests,
     generate_service_tests,
     generate_user_tests,
+    generate_group_tests,
     generate_file_tests,
     generate_firewall_tests,
     generate_http_endpoint_tests,
@@ -182,6 +183,18 @@ def _generate_phase_tests(
             tests=user_tests,
         )
         path = phase_dir / "test_users.py"
+        path.write_text(content)
+        generated_files.append(path)
+
+    # Group tests
+    group_tests = generate_group_tests(contract)
+    if group_tests:
+        content = env.get_template("test_groups.py.j2").render(
+            assignment_id=spec.assignment_id,
+            phase=phase,
+            tests=group_tests,
+        )
+        path = phase_dir / "test_groups.py"
         path.write_text(content)
         generated_files.append(path)
 
