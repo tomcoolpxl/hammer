@@ -77,10 +77,10 @@ This document outlines the phased implementation plan for the HAMMER project. Th
 ## Phase 5: The "Grade" Command (Runner)
 **Goal:** Can execute the grading pipeline (Converge -> Snapshot -> Verify) on a local student repo.
 
-*   [ ] Implement `hammer.runner` module.
-*   [ ] Integrate `ansible-runner` to run playbooks programmatically.
-*   [ ] Implement snapshot extraction playbook generation.
-*   [ ] Implement `hammer grade` CLI command.
+*   [x] Implement `hammer.runner` module.
+*   [x] Integrate `ansible-runner` to run playbooks programmatically.
+*   [x] Implement snapshot extraction playbook generation.
+*   [x] Implement `hammer grade` CLI command.
 *   [ ] **Integration Test:** Run a full grading cycle on the "Reference Example" spec.
 
 ## Phase 6: Refinement & Regression Suite

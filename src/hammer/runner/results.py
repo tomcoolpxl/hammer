@@ -3,7 +3,7 @@
 Provides structured representations of grading results.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -61,7 +61,7 @@ class GradeReport(BaseModel):
 
     assignment_id: str
     spec_version: str
-    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     phases: Dict[str, PhaseResult] = Field(default_factory=dict)
     total_score: float = 0.0
     max_score: float = 0.0

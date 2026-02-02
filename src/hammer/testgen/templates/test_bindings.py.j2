@@ -20,7 +20,7 @@ def test_{{ test.test_name }}(host_{{ test.host }}):
         f"Expected {{ test.service }} to listen on {{ test.address }}:{{ test.expected_value }}"
 {% elif test.binding_type == "firewall_port_open" %}
     # Check firewall port is open
-    cmd = host_{{ test.host }}.run("firewall-cmd --list-ports --zone={{ test.zone }}")
+    cmd = host_{{ test.host }}.run("sudo firewall-cmd --list-ports --zone={{ test.zone }}")
     assert cmd.rc == 0, "Failed to query firewall"
     assert "{{ test.expected_value }}/{{ test.protocol }}" in cmd.stdout, \
         f"Expected port {{ test.expected_value }}/{{ test.protocol }} to be open in zone {{ test.zone }}"

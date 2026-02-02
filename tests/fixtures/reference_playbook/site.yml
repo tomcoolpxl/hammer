@@ -1,0 +1,50 @@
+---
+# Reference playbook for HAMMER testing
+# This playbook configures nginx with a configurable port
+
+- name: Configure web servers
+  hosts: web
+  become: yes
+
+  tasks:
+    - name: Install nginx
+      ansible.builtin.dnf:
+        name: nginx
+        state: present
+
+    - name: Create nginx config
+      ansible.builtin.template:
+        src: hammer.conf.j2
+        dest: /etc/nginx/conf.d/hammer.conf
+        owner: root
+        group: root
+        mode: "0644"
+      notify: restart nginx
+
+    - name: Create index page
+      ansible.builtin.copy:
+        content: "{{ welcome_text }}"
+        dest: /usr/share/nginx/html/index.html
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Enable and start nginx
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: yes
+
+    - name: Configure firewall for http_port
+      ansible.posix.firewalld:
+        port: "{{ http_port }}/tcp"
+        zone: public
+        permanent: yes
+        immediate: yes
+        state: enabled
+
+  handlers:
+    - name: restart nginx
+      ansible.builtin.service:
+        name: nginx
+        state: restarted

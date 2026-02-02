@@ -117,8 +117,12 @@ def _get_hosts_for_binding(spec: HammerSpec, binding: BindingCheck) -> List[str]
     """
     Determine which hosts a binding applies to.
 
-    For now, we find the variable contract and use its overlay targets
-    to determine applicable hosts/groups.
+    This uses the most specific scope from the variable's overlay targets.
+    We prioritize in order: host_vars > group_vars > inventory_vars/extra_vars.
+
+    The idea is that bindings should only be tested on hosts where the
+    playbook actually uses the variable, which is typically determined
+    by the group scope, not by extra_vars which just override values.
     """
     # Find the variable contract
     var_contract = None
@@ -130,25 +134,32 @@ def _get_hosts_for_binding(spec: HammerSpec, binding: BindingCheck) -> List[str]
     if not var_contract:
         return []
 
-    hosts = set()
+    # Collect hosts by specificity level
+    host_vars_hosts = set()
+    group_vars_hosts = set()
+    global_hosts = set()
 
-    # Look at grading overlay targets to determine hosts
     for target in var_contract.grading_overlay_targets:
         if target.overlay_kind == "host_vars":
-            # Direct host reference
-            hosts.add(target.target_name)
+            # Direct host reference - most specific
+            host_vars_hosts.add(target.target_name)
         elif target.overlay_kind == "group_vars":
             # Find all hosts in this group
             for node in spec.topology.nodes:
                 if target.target_name in node.groups:
-                    hosts.add(node.name)
+                    group_vars_hosts.add(node.name)
         elif target.overlay_kind in ("extra_vars", "inventory_vars"):
-            # Applies to all hosts
+            # Global scope - collect but use as fallback only
             for node in spec.topology.nodes:
-                hosts.add(node.name)
+                global_hosts.add(node.name)
 
-    # If no hosts determined, default to first host with matching group
-    if not hosts:
-        hosts.add(spec.topology.nodes[0].name)
-
-    return sorted(hosts)
+    # Return the most specific scope that has hosts
+    if host_vars_hosts:
+        return sorted(host_vars_hosts)
+    elif group_vars_hosts:
+        return sorted(group_vars_hosts)
+    elif global_hosts:
+        return sorted(global_hosts)
+    else:
+        # Default to first host if nothing else found
+        return [spec.topology.nodes[0].name]

@@ -1,18 +1,34 @@
 """Ansible execution wrapper for HAMMER.
 
-Provides programmatic Ansible playbook execution using ansible-runner.
+Provides programmatic Ansible playbook execution.
 """
 
 import json
 import os
-import tempfile
+import re
+import shutil
+import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-
-import ansible_runner
-import yaml
+from typing import Any, Dict, Optional
 
 from hammer.runner.results import ConvergeResult
+
+
+def find_ansible_playbook() -> str:
+    """Find the ansible-playbook executable."""
+    # Check common locations
+    locations = [
+        shutil.which("ansible-playbook"),
+        os.path.expanduser("~/.local/bin/ansible-playbook"),
+        "/usr/bin/ansible-playbook",
+        "/usr/local/bin/ansible-playbook",
+    ]
+
+    for loc in locations:
+        if loc and os.path.exists(loc):
+            return loc
+
+    raise FileNotFoundError("ansible-playbook not found in PATH or common locations")
 
 
 def run_playbook(
@@ -23,9 +39,10 @@ def run_playbook(
     extra_vars_file: Optional[Path] = None,
     env_vars: Optional[Dict[str, str]] = None,
     quiet: bool = False,
+    timeout: int = 600,
 ) -> tuple[ConvergeResult, str]:
     """
-    Run an Ansible playbook using ansible-runner.
+    Run an Ansible playbook using subprocess.
 
     Args:
         playbook_path: Path to the playbook file
@@ -35,73 +52,101 @@ def run_playbook(
         extra_vars_file: Path to extra vars YAML file
         env_vars: Environment variables for the run
         quiet: Suppress output
+        timeout: Timeout in seconds
 
     Returns:
         Tuple of (ConvergeResult, stdout_log)
     """
-    # Build command line arguments
-    cmdline = [
+    ansible_playbook = find_ansible_playbook()
+
+    # Build command
+    cmd = [
+        ansible_playbook,
+        str(playbook_path),
         "-i", str(inventory_path),
     ]
 
     if extra_vars:
-        cmdline.extend(["-e", json.dumps(extra_vars)])
+        cmd.extend(["-e", json.dumps(extra_vars)])
 
     if extra_vars_file and extra_vars_file.exists():
-        cmdline.extend(["-e", f"@{extra_vars_file}"])
+        cmd.extend(["-e", f"@{extra_vars_file}"])
 
     # Set up environment
     envvars = dict(os.environ)
     envvars["ANSIBLE_HOST_KEY_CHECKING"] = "False"
     envvars["ANSIBLE_RETRY_FILES_ENABLED"] = "False"
+    envvars["ANSIBLE_FORCE_COLOR"] = "False"
+
+    # Ensure ~/.local/bin is in PATH
+    local_bin = os.path.expanduser("~/.local/bin")
+    if local_bin not in envvars.get("PATH", ""):
+        envvars["PATH"] = f"{local_bin}:{envvars.get('PATH', '')}"
+
     if env_vars:
         envvars.update(env_vars)
 
-    # Create a temporary directory for ansible-runner artifacts
-    with tempfile.TemporaryDirectory() as artifact_dir:
-        # Run the playbook
-        runner = ansible_runner.run(
-            private_data_dir=str(working_dir),
-            playbook=str(playbook_path),
-            cmdline=" ".join(cmdline),
-            envvars=envvars,
-            quiet=quiet,
-            artifact_dir=artifact_dir,
+    # Run the playbook
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=str(working_dir),
+            env=envvars,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
+        stdout = result.stdout + result.stderr
+        success = result.returncode == 0
+        error_message = None if success else f"Exit code: {result.returncode}"
 
-        # Parse the results
-        result = parse_runner_result(runner)
+    except subprocess.TimeoutExpired as e:
+        stdout = (e.stdout or b"").decode() + (e.stderr or b"").decode()
+        success = False
+        error_message = f"Playbook timed out after {timeout} seconds"
 
-        # Capture stdout
-        stdout = runner.stdout.read() if runner.stdout else ""
+    except Exception as e:
+        stdout = str(e)
+        success = False
+        error_message = str(e)
 
-        return result, stdout
+    # Parse play recap from stdout
+    converge_result = parse_play_recap(stdout, success, error_message)
+
+    return converge_result, stdout
 
 
-def parse_runner_result(runner: ansible_runner.Runner) -> ConvergeResult:
+def parse_play_recap(
+    stdout: str,
+    success: bool,
+    error_message: Optional[str],
+) -> ConvergeResult:
     """
-    Parse ansible-runner result into ConvergeResult.
+    Parse play recap from ansible-playbook stdout.
 
     Args:
-        runner: The ansible-runner Runner object
+        stdout: The stdout from ansible-playbook
+        success: Whether the playbook succeeded
+        error_message: Error message if failed
 
     Returns:
         ConvergeResult with parsed stats
     """
-    # Check for overall success
-    success = runner.status == "successful"
-    error_message = None
+    # Parse PLAY RECAP section
+    # Format: hostname : ok=N changed=N unreachable=N failed=N skipped=N rescued=N ignored=N
+    recap_pattern = re.compile(
+        r"^(\S+)\s+:\s+"
+        r"ok=(\d+)\s+"
+        r"changed=(\d+)\s+"
+        r"unreachable=(\d+)\s+"
+        r"failed=(\d+)"
+        r"(?:\s+skipped=(\d+))?"
+        r"(?:\s+rescued=(\d+))?"
+        r"(?:\s+ignored=(\d+))?",
+        re.MULTILINE,
+    )
 
-    if runner.status == "failed":
-        error_message = "Playbook execution failed"
-    elif runner.status == "timeout":
-        error_message = "Playbook execution timed out"
-
-    # Parse play recap from stats
-    stats = runner.stats or {}
     play_recap: Dict[str, Dict[str, int]] = {}
-
-    # Aggregate stats across all hosts
     totals = {
         "ok": 0,
         "changed": 0,
@@ -112,23 +157,33 @@ def parse_runner_result(runner: ansible_runner.Runner) -> ConvergeResult:
         "ignored": 0,
     }
 
-    for host, host_stats in stats.items():
+    for match in recap_pattern.finditer(stdout):
+        host = match.group(1)
+        ok = int(match.group(2))
+        changed = int(match.group(3))
+        unreachable = int(match.group(4))
+        failed = int(match.group(5))
+        skipped = int(match.group(6) or 0)
+        rescued = int(match.group(7) or 0)
+        ignored = int(match.group(8) or 0)
+
         play_recap[host] = {
-            "ok": host_stats.get("ok", 0),
-            "changed": host_stats.get("changed", 0),
-            "failures": host_stats.get("failures", 0),
-            "unreachable": host_stats.get("unreachable", 0),
-            "skipped": host_stats.get("skipped", 0),
-            "rescued": host_stats.get("rescued", 0),
-            "ignored": host_stats.get("ignored", 0),
+            "ok": ok,
+            "changed": changed,
+            "unreachable": unreachable,
+            "failures": failed,
+            "skipped": skipped,
+            "rescued": rescued,
+            "ignored": ignored,
         }
-        totals["ok"] += host_stats.get("ok", 0)
-        totals["changed"] += host_stats.get("changed", 0)
-        totals["failed"] += host_stats.get("failures", 0)
-        totals["unreachable"] += host_stats.get("unreachable", 0)
-        totals["skipped"] += host_stats.get("skipped", 0)
-        totals["rescued"] += host_stats.get("rescued", 0)
-        totals["ignored"] += host_stats.get("ignored", 0)
+
+        totals["ok"] += ok
+        totals["changed"] += changed
+        totals["unreachable"] += unreachable
+        totals["failed"] += failed
+        totals["skipped"] += skipped
+        totals["rescued"] += rescued
+        totals["ignored"] += ignored
 
     return ConvergeResult(
         ok=totals["ok"],

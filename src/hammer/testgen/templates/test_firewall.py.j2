@@ -15,7 +15,7 @@ import pytest
 @pytest.mark.{{ phase }}
 def test_firewall_port_{{ port.port }}_{{ port.protocol }}_on_{{ host }}(host_{{ host }}):
     """Verify firewall allows {{ port.port }}/{{ port.protocol }} in zone {{ port.zone }} on {{ host }}."""
-    cmd = host_{{ host }}.run("firewall-cmd --list-ports --zone={{ port.zone }}")
+    cmd = host_{{ host }}.run("sudo firewall-cmd --list-ports --zone={{ port.zone }}")
     assert cmd.rc == 0, f"Failed to query firewall on {{ host }}"
     assert "{{ port.port }}/{{ port.protocol }}" in cmd.stdout, \
         f"Port {{ port.port }}/{{ port.protocol }} should be open in zone {{ port.zone }} on {{ host }}"

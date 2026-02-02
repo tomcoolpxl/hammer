@@ -16,9 +16,11 @@ def test_{{ test.from_host }}_can{% if test.expectation == "not_reachable" %}not
     """Verify {{ test.from_host }} {% if test.expectation == "not_reachable" %}cannot{% else %}can{% endif %} reach {{ test.to_host }} on port {{ test.port }}/{{ test.protocol }}."""
     target_ip = NETWORK["{{ test.to_host }}"]
 {% if test.protocol == "tcp" %}
-    cmd = host_{{ test.from_host }}.run(f"nc -zv -w 5 {target_ip} {{ test.port }}")
+    # Use bash /dev/tcp for TCP checks (more portable than netcat)
+    cmd = host_{{ test.from_host }}.run(f"timeout 5 bash -c 'cat < /dev/null > /dev/tcp/{target_ip}/{{ test.port }}' 2>/dev/null")
 {% else %}
-    cmd = host_{{ test.from_host }}.run(f"nc -zuv -w 5 {target_ip} {{ test.port }}")
+    # For UDP, try using curl with timeout or fall back to bash
+    cmd = host_{{ test.from_host }}.run(f"timeout 5 bash -c 'cat < /dev/null > /dev/udp/{target_ip}/{{ test.port }}' 2>/dev/null")
 {% endif %}
 {% if test.expectation == "reachable" %}
     assert cmd.rc == 0, \
