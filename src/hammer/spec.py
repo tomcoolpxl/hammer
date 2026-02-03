@@ -55,16 +55,17 @@ class NodeResources(BaseModel):
     ram_mb: int = Field(ge=256, le=262144)
 
 
-class Node(BaseModel):
-    name: NonEmptyStr
-    groups: List[NonEmptyStr]
-    resources: NodeResources
-
-
 class ForwardedPort(BaseModel):
     host_port: int = Field(ge=1, le=65535)
     guest_port: int = Field(ge=1, le=65535)
     protocol: Protocol
+
+
+class Node(BaseModel):
+    name: NonEmptyStr
+    groups: List[NonEmptyStr]
+    resources: NodeResources
+    forwarded_ports: Optional[List[ForwardedPort]] = None
 
 
 class Dependency(BaseModel):
@@ -74,8 +75,9 @@ class Dependency(BaseModel):
 
 
 class Topology(BaseModel):
+    domain: Optional[NonEmptyStr] = None  # Optional domain suffix for FQDNs
     nodes: List[Node]
-    forwarded_ports: Optional[List[ForwardedPort]] = None
+    forwarded_ports: Optional[List[ForwardedPort]] = None  # Topology-wide ports (legacy)
     dependencies: Optional[List[Dependency]] = None
 
     @model_validator(mode="after")
@@ -436,6 +438,7 @@ class IdempotencePolicy(BaseModel):
 # -------------------------
 
 class VaultSpec(BaseModel):
+    vault_password: NonEmptyStr  # The vault password for decryption
     vault_ids: Optional[List[NonEmptyStr]] = None
     vaulted_vars_files: List[NonEmptyStr]
     vaulted_variables: List[NonEmptyStr]

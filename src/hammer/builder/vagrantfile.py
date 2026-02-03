@@ -39,4 +39,5 @@ def render_vagrantfile(
         box_name=box_name,
         nodes=spec.topology.nodes,
         network=network,
+        domain=spec.topology.domain,
     )

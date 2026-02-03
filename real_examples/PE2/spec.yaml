@@ -1,0 +1,245 @@
+# PE2 Ansible Automation Assignment
+# HAMMER Spec for automated grading
+
+assignment_id: "pe2-ansible-automation"
+assignment_version: "2026.02"
+spec_version: "1.0"
+seed: 42
+provider: "libvirt"
+os: "almalinux9"
+
+features:
+  vault: true
+  selinux: false
+  handlers: false
+  reachability: false
+
+topology:
+  domain: "pxldemo.local"
+  nodes:
+    - name: "server0"
+      groups: ["servers", "webservers"]
+      resources:
+        cpu: 1
+        ram_mb: 1024
+      forwarded_ports:
+        - host_port: 8888
+          guest_port: 80
+          protocol: tcp
+    - name: "server1"
+      groups: ["servers", "dbservers"]
+      resources:
+        cpu: 1
+        ram_mb: 1024
+      forwarded_ports:
+        - host_port: 8889
+          guest_port: 80
+          protocol: tcp
+
+entrypoints:
+  playbook_path: "playbook.yml"
+  required_files:
+    - "playbook.yml"
+  provided_files:
+    - source: "templates/httpd.conf.j2"
+      destination: "templates/httpd.conf.j2"
+    - source: "templates/index.html.j2"
+      destination: "templates/index.html.j2"
+    - source: "templates/motd.j2"
+      destination: "templates/motd.j2"
+
+variable_contracts:
+  - name: "http_port"
+    type: "int"
+    defaults:
+      student: 8080
+    allowed_values: [8080, 9090]
+    grading_overlay_targets:
+      - overlay_kind: "group_vars"
+        target_name: "webservers"
+    binding_targets:
+      - type: "service_listen_port"
+        weight: 2.0
+        target:
+          service: "httpd"
+          protocol: "tcp"
+          address: "0.0.0.0"
+      - type: "firewall_port_open"
+        weight: 2.0
+        target:
+          zone: "public"
+          protocol: "tcp"
+
+behavioral_contracts:
+  # ===================
+  # BASIC (50%)
+  # ===================
+
+  packages:
+    # Web server
+    - name: "httpd"
+      state: "present"
+      node_selector: { group: "webservers" }
+      weight: 5.0
+    # DB server - chrony for time sync
+    - name: "chrony"
+      state: "present"
+      node_selector: { group: "dbservers" }
+      weight: 3.0
+    # Extra: loops - additional packages
+    - name: "httpd-tools"
+      state: "present"
+      node_selector: { group: "webservers" }
+      weight: 1.0
+    - name: "mod_ssl"
+      state: "present"
+      node_selector: { group: "webservers" }
+      weight: 1.0
+    # Extra: conditionals
+    - name: "wget"
+      state: "present"
+      node_selector: { group: "webservers" }
+      weight: 2.0
+
+  services:
+    - name: "httpd"
+      enabled: true
+      running: true
+      node_selector: { group: "webservers" }
+      weight: 5.0
+    - name: "chronyd"
+      enabled: true
+      running: true
+      node_selector: { group: "dbservers" }
+      weight: 3.0
+
+  # Group must exist before user
+  groups:
+    - name: "mysql"
+      exists: true
+      node_selector: { group: "dbservers" }
+      weight: 2.0
+
+  users:
+    # Basic: mysql user
+    - name: "mysql"
+      exists: true
+      groups: ["mysql"]
+      node_selector: { group: "dbservers" }
+      weight: 3.0
+    # Extra: loops - multiple users
+    - name: "webadmin"
+      exists: true
+      shell: "/bin/bash"
+      node_selector: { group: "webservers" }
+      weight: 1.0
+    - name: "reviewer"
+      exists: true
+      shell: "/bin/bash"
+      node_selector: { group: "webservers" }
+      weight: 1.0
+    - name: "monitor"
+      exists: true
+      shell: "/bin/bash"
+      node_selector: { group: "webservers" }
+      weight: 1.0
+
+  files:
+    # Basic: Backup directory with ownership
+    - items:
+        - path: "/opt/backup"
+          present: true
+          is_directory: true
+          owner: "mysql"
+          group: "mysql"
+      node_selector: { group: "dbservers" }
+      weight: 3.0
+    # Basic: Index.html deployed from template
+    - items:
+        - path: "/var/www/html/index.html"
+          present: true
+          content_regex: "Ansible Test Deployment"
+      node_selector: { group: "webservers" }
+      weight: 2.0
+    # Extra: retries - fallback file exists
+    - items:
+        - path: "/tmp/test_file.txt"
+          present: true
+      node_selector: { group: "webservers" }
+      weight: 2.0
+    # Extra: common - motd with company info
+    - items:
+        - path: "/etc/motd"
+          present: true
+          content_regex: "PXL Education"
+      node_selector: { group: "servers" }
+      weight: 2.0
+    # Extra: conditionals - server_role file
+    - items:
+        - path: "/etc/sysconfig/server_role"
+          present: true
+          content_regex: "webserver"
+      node_selector: { group: "webservers" }
+      weight: 2.0
+    # Extra: vault - secret file with vault value (root-only readable)
+    - items:
+        - path: "/var/www/html/secret.txt"
+          present: true
+          content_regex: "PXLPXL"
+          mode: "0600"
+          owner: "root"
+      node_selector: { group: "webservers" }
+      weight: 2.0
+
+  firewall:
+    - open_ports:
+        - port: { var: "http_port" }
+          protocol: "tcp"
+          zone: "public"
+      firewall_type: "firewalld"
+      node_selector: { group: "webservers" }
+      weight: 4.0
+
+  http_endpoints:
+    - url: "http://localhost:8080/"
+      method: "GET"
+      expected_status: 200
+      response_contains: "Ansible Test Deployment"
+      timeout_seconds: 10
+      node_selector: { host: "server0" }
+      weight: 5.0
+
+idempotence:
+  required: true
+  enforcement:
+    require_changed_zero: true
+    require_no_handlers: true
+
+# Vault configuration for playbook_vault.yml extra
+vault:
+  vault_password: "passwordpxl"
+  vaulted_vars_files:
+    - "vault.yml"
+  vaulted_variables:
+    - "vault_secret_key"
+  bindings_to_verify: []
+
+phase_overlays:
+  baseline:
+    group_vars:
+      webservers:
+        http_port: 8080
+      dbservers:
+        backup_dir: "/opt/backup"
+      servers:
+        company_name: "PXL Education"
+        admin_email: "admin@pxl.be"
+  mutation:
+    group_vars:
+      webservers:
+        http_port: 9090
+      dbservers:
+        backup_dir: "/opt/backup"
+      servers:
+        company_name: "PXL Education"
+        admin_email: "admin@pxl.be"

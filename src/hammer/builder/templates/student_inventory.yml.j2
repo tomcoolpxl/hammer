@@ -8,7 +8,11 @@ all:
     {{ group_name }}:
       hosts:
 {% for host in hosts %}
+{% if domain %}
+        {{ host.name }}.{{ domain }}:
+{% else %}
         {{ host.name }}:
+{% endif %}
           ansible_host: {{ network.node_ip_map[host.name] }}
           ansible_user: vagrant
           ansible_ssh_private_key_file: .vagrant/machines/{{ host.name }}/libvirt/private_key

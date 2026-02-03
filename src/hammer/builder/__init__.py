@@ -223,5 +223,12 @@ def _build_grading_bundle(
     # Phase overlays
     write_grading_phase_overlays(spec, plan, output_dir)
 
+    # Vault password file (if vault is configured)
+    if spec.vault:
+        vault_pass_path = output_dir / ".vault_pass"
+        vault_pass_path.write_text(spec.vault.vault_password)
+        vault_pass_path.chmod(0o600)
+        checksums["grading_bundle/.vault_pass"] = compute_file_checksum(spec.vault.vault_password)
+
     # Generate tests
     generate_tests(spec, plan, network, output_dir)

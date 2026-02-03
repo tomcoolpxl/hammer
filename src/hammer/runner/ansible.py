@@ -37,6 +37,7 @@ def run_playbook(
     working_dir: Path,
     extra_vars: Optional[Dict[str, Any]] = None,
     extra_vars_file: Optional[Path] = None,
+    vault_password_file: Optional[Path] = None,
     env_vars: Optional[Dict[str, str]] = None,
     quiet: bool = False,
     timeout: int = 600,
@@ -50,6 +51,7 @@ def run_playbook(
         working_dir: Working directory for execution
         extra_vars: Dictionary of extra variables
         extra_vars_file: Path to extra vars YAML file
+        vault_password_file: Path to vault password file
         env_vars: Environment variables for the run
         quiet: Suppress output
         timeout: Timeout in seconds
@@ -71,6 +73,9 @@ def run_playbook(
 
     if extra_vars_file and extra_vars_file.exists():
         cmd.extend(["-e", f"@{extra_vars_file}"])
+
+    if vault_password_file and vault_password_file.exists():
+        cmd.extend(["--vault-password-file", str(vault_password_file)])
 
     # Set up environment
     envvars = dict(os.environ)

@@ -56,6 +56,7 @@ def render_student_inventory(spec: HammerSpec, network: NetworkPlan) -> str:
         assignment_id=spec.assignment_id,
         groups=groups,
         network=network,
+        domain=spec.topology.domain,
     )
 
 
@@ -113,12 +114,19 @@ def write_student_host_vars(
     host_vars_dir = output_dir / "host_vars"
     host_vars_dir.mkdir(parents=True, exist_ok=True)
 
+    domain = spec.topology.domain
+
     # Write host-specific network info
     for node in spec.topology.nodes:
         host_data = {
             "ansible_host": network.node_ip_map[node.name],
         }
-        with open(host_vars_dir / f"{node.name}.yml", "w") as f:
+        # Use FQDN for filename if domain is set (to match inventory)
+        if domain:
+            filename = f"{node.name}.{domain}.yml"
+        else:
+            filename = f"{node.name}.yml"
+        with open(host_vars_dir / filename, "w") as f:
             yaml.dump(host_data, f, default_flow_style=False)
 
 
@@ -203,12 +211,19 @@ def write_grading_host_vars(
     host_vars_dir = output_dir / "host_vars"
     host_vars_dir.mkdir(parents=True, exist_ok=True)
 
+    domain = spec.topology.domain
+
     for node in spec.topology.nodes:
         host_data = {
             "ansible_host": network.node_ip_map[node.name],
             "ansible_user": "vagrant",
         }
-        with open(host_vars_dir / f"{node.name}.yml", "w") as f:
+        # Use FQDN for filename if domain is set (to match inventory)
+        if domain:
+            filename = f"{node.name}.{domain}.yml"
+        else:
+            filename = f"{node.name}.yml"
+        with open(host_vars_dir / filename, "w") as f:
             yaml.dump(host_data, f, default_flow_style=False)
 
 
