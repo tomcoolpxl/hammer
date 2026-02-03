@@ -1,0 +1,187 @@
+# PE3 Nginx Webserver Configuration Assignment
+# HAMMER Spec for automated grading
+
+assignment_id: "pe3-nginx-webserver"
+assignment_version: "2026.02"
+spec_version: "1.0"
+seed: 42
+provider: "libvirt"
+os: "almalinux9"
+
+features:
+  vault: false
+  selinux: false
+  handlers: true
+  reachability: false
+
+topology:
+  domain: "pxldemo.local"
+  nodes:
+    - name: "server0"
+      groups: ["all", "webservers"]
+      resources:
+        cpu: 1
+        ram_mb: 1024
+      forwarded_ports:
+        - host_port: 8888
+          guest_port: 8080
+          protocol: tcp
+
+entrypoints:
+  playbook_path: "playbook.yml"
+  required_files:
+    - "playbook.yml"
+  provided_files:
+    - source: "landing-page.html.j2"
+      destination: "templates/landing-page.html.j2"
+    - source: "nginx.conf"
+      destination: "nginx.conf.example"
+
+variable_contracts:
+  - name: "web_port"
+    type: "int"
+    defaults:
+      student: 8080
+    allowed_values: [8080, 9090]
+    grading_overlay_targets:
+      - overlay_kind: "group_vars"
+        target_name: "webservers"
+    binding_targets:
+      - type: "service_listen_port"
+        weight: 2.0
+        target:
+          service: "nginx"
+          protocol: "tcp"
+          address: "0.0.0.0"
+      - type: "firewall_port_open"
+        weight: 2.0
+        target:
+          zone: "public"
+          protocol: "tcp"
+
+behavioral_contracts:
+  # ===================
+  # MINIMUM (10/20)
+  # ===================
+
+  packages:
+    - name: "nginx"
+      state: "present"
+      node_selector: { group: "webservers" }
+      weight: 3.0
+    - name: "firewalld"
+      state: "present"
+      node_selector: { group: "webservers" }
+      weight: 2.0
+
+  services:
+    - name: "nginx"
+      enabled: true
+      running: true
+      node_selector: { group: "webservers" }
+      weight: 3.0
+    - name: "firewalld"
+      enabled: true
+      running: true
+      node_selector: { group: "webservers" }
+      weight: 2.0
+
+  files:
+    # Document root directory (variable doc_root)
+    - items:
+        - path: "/var/www/mypage"
+          present: true
+          is_directory: true
+      node_selector: { group: "webservers" }
+      weight: 2.0
+    # Index.html created from landing-page.html.j2 template
+    - items:
+        - path: "/var/www/mypage/index.html"
+          present: true
+      node_selector: { group: "webservers" }
+      weight: 2.0
+    # nginx config file with parameterized port and doc_root
+    - items:
+        - path: "/etc/nginx/conf.d/mypage.conf"
+          present: true
+          content_regex: "listen.*8080"
+      node_selector: { group: "webservers" }
+      weight: 3.0
+    # Verify doc_root is used in nginx config
+    - items:
+        - path: "/etc/nginx/conf.d/mypage.conf"
+          present: true
+          content_regex: "/var/www/mypage"
+      node_selector: { group: "webservers" }
+      weight: 2.0
+
+  firewall:
+    - open_ports:
+        - port: { var: "web_port" }
+          protocol: "tcp"
+          zone: "public"
+      firewall_type: "firewalld"
+      node_selector: { group: "webservers" }
+      weight: 3.0
+
+  http_endpoints:
+    # Test that nginx serves the page on configured port
+    - url: "http://localhost:8080/"
+      method: "GET"
+      expected_status: 200
+      timeout_seconds: 10
+      node_selector: { host: "server0" }
+      weight: 5.0
+
+# Handler contracts - defined for documentation but not yet tested
+handler_contracts:
+  - handler_name: "restart nginx"
+    node_selector: { group: "webservers" }
+    handler_target:
+      service: "nginx"
+      action: "restart"
+    trigger_conditions:
+      - template_changed: "/etc/nginx/conf.d/mypage.conf"
+    non_trigger_conditions:
+      - noop_rerun: true
+    expected_runs:
+      baseline: "at_least_once"
+      mutation: "at_least_once"
+      idempotence: "zero"
+    weight: 2.0
+  - handler_name: "restart firewalld"
+    node_selector: { group: "webservers" }
+    handler_target:
+      service: "firewalld"
+      action: "restart"
+    trigger_conditions:
+      - variable_changed: "web_port"
+    non_trigger_conditions:
+      - noop_rerun: true
+    expected_runs:
+      baseline: "at_least_once"
+      mutation: "at_least_once"
+      idempotence: "zero"
+    weight: 2.0
+
+idempotence:
+  required: true
+  enforcement:
+    require_changed_zero: true
+    require_no_handlers: true
+
+phase_overlays:
+  baseline:
+    group_vars:
+      webservers:
+        web_port: 8080
+        doc_root: "/var/www/mypage"
+        page_title: "My Page"
+        page_description: "Created with Ansible"
+  mutation:
+    group_vars:
+      webservers:
+        web_port: 9090
+        doc_root: "/var/www/mypage"
+        page_title: "My Page"
+        page_description: "Created with Ansible"
