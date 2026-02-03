@@ -21,6 +21,7 @@ from hammer.testgen.behavioral import (
     generate_service_tests,
     generate_file_tests,
     generate_firewall_tests,
+    generate_handler_tests,
 )
 from hammer.testgen.reachability import generate_reachability_tests
 
@@ -160,6 +161,56 @@ class TestReachabilityTestGeneration:
         assert test["to_host"] == "web1"
         assert test["port"] == 8080
         assert test["expectation"] == "reachable"
+
+
+class TestHandlerTestGeneration:
+    """Tests for handler test generation."""
+
+    def test_handler_test_generation(self, plan):
+        """Handler tests should be generated from contracts."""
+        contract = plan.contracts["baseline"]
+        tests = generate_handler_tests(contract)
+
+        # Should have handler test for "restart nginx"
+        assert len(tests) >= 1
+
+        nginx_handler = next(
+            (t for t in tests if t["name"] == "restart nginx"), None
+        )
+        assert nginx_handler is not None
+        assert nginx_handler["service"] == "nginx"
+        assert nginx_handler["action"] == "restart"
+        assert nginx_handler["expected_runs"] == "at_least_once"
+        assert nginx_handler["weight"] == 2.0
+
+    def test_handler_test_mutation_phase(self, plan):
+        """Handler tests should have correct expectations per phase."""
+        baseline = plan.contracts["baseline"]
+        mutation = plan.contracts["mutation"]
+
+        baseline_tests = generate_handler_tests(baseline)
+        mutation_tests = generate_handler_tests(mutation)
+
+        # Baseline expects at_least_once, mutation expects exactly_once
+        baseline_handler = next(
+            (t for t in baseline_tests if t["name"] == "restart nginx"), None
+        )
+        mutation_handler = next(
+            (t for t in mutation_tests if t["name"] == "restart nginx"), None
+        )
+
+        assert baseline_handler["expected_runs"] == "at_least_once"
+        assert mutation_handler["expected_runs"] == "exactly_once"
+
+    def test_handler_test_idempotence_phase(self, plan):
+        """Idempotence phase should expect zero handler runs."""
+        idempotence = plan.contracts["idempotence"]
+        tests = generate_handler_tests(idempotence)
+
+        nginx_handler = next(
+            (t for t in tests if t["name"] == "restart nginx"), None
+        )
+        assert nginx_handler["expected_runs"] == "zero"
 
 
 class TestFullTestGeneration:

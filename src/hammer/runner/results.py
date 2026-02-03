@@ -3,7 +3,9 @@
 Provides structured representations of grading results.
 """
 
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -20,6 +22,7 @@ class ConvergeResult(BaseModel):
     rescued: int = 0
     ignored: int = 0
     play_recap: Dict[str, Dict[str, int]] = Field(default_factory=dict)
+    handlers_run: Dict[str, int] = Field(default_factory=dict)  # handler_name -> run count
     success: bool = True
     error_message: Optional[str] = None
 
@@ -98,3 +101,28 @@ def calculate_total_score(phases: Dict[str, PhaseResult]) -> tuple[float, float,
 
     percentage = (total_earned / total_max) * 100
     return total_earned, total_max, percentage
+
+
+def write_handler_runs(
+    grading_dir: Path,
+    phase: str,
+    converge_result: ConvergeResult,
+) -> Path:
+    """
+    Write handler execution data to a file for test verification.
+
+    Args:
+        grading_dir: The grading bundle directory
+        phase: The phase name (baseline, mutation, idempotence)
+        converge_result: The converge result containing handler runs
+
+    Returns:
+        Path to the written handler runs file
+    """
+    handler_runs_dir = grading_dir / ".handler_runs"
+    handler_runs_dir.mkdir(parents=True, exist_ok=True)
+
+    handler_file = handler_runs_dir / f"{phase}.json"
+    handler_file.write_text(json.dumps(converge_result.handlers_run, indent=2))
+
+    return handler_file

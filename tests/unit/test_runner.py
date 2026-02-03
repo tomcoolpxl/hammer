@@ -20,8 +20,9 @@ from hammer.runner.results import (
     GradeReport,
     calculate_phase_score,
     calculate_total_score,
+    write_handler_runs,
 )
-from hammer.runner.ansible import check_idempotence
+from hammer.runner.ansible import check_idempotence, parse_handler_runs
 from hammer.runner.snapshot import get_files_to_check, render_snapshot_playbook
 
 FIXTURES_DIR = PROJECT_ROOT / "tests" / "fixtures"
@@ -228,3 +229,113 @@ class TestSnapshotPlaybook:
             play = parsed[0]
             assert "tasks" in play
             assert len(play["tasks"]) > 0
+
+
+class TestHandlerRunsParsing:
+    """Tests for handler runs parsing from Ansible output."""
+
+    def test_parse_handler_runs_simple(self):
+        """Should parse simple handler names."""
+        stdout = """
+PLAY [webservers] **************************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [web1]
+
+TASK [Install nginx] ***********************************************************
+changed: [web1]
+
+RUNNING HANDLER [restart nginx] ************************************************
+changed: [web1]
+
+PLAY RECAP *********************************************************************
+web1                       : ok=3    changed=2    unreachable=0    failed=0
+"""
+        handlers = parse_handler_runs(stdout)
+        assert handlers == {"restart nginx": 1}
+
+    def test_parse_handler_runs_with_role_prefix(self):
+        """Should parse handler names with role prefix."""
+        stdout = """
+RUNNING HANDLER [nginx : restart nginx] ****************************************
+changed: [web1]
+
+RUNNING HANDLER [nginx : reload nginx] *****************************************
+changed: [web1]
+
+PLAY RECAP *********************************************************************
+web1                       : ok=5    changed=3    unreachable=0    failed=0
+"""
+        handlers = parse_handler_runs(stdout)
+        assert handlers == {"restart nginx": 1, "reload nginx": 1}
+
+    def test_parse_handler_runs_multiple_times(self):
+        """Should count handlers that run multiple times."""
+        stdout = """
+RUNNING HANDLER [restart nginx] ************************************************
+changed: [web1]
+
+RUNNING HANDLER [restart nginx] ************************************************
+changed: [web2]
+
+PLAY RECAP *********************************************************************
+web1                       : ok=3    changed=2    unreachable=0    failed=0
+web2                       : ok=3    changed=2    unreachable=0    failed=0
+"""
+        handlers = parse_handler_runs(stdout)
+        assert handlers == {"restart nginx": 2}
+
+    def test_parse_handler_runs_empty(self):
+        """Should return empty dict when no handlers run."""
+        stdout = """
+PLAY [webservers] **************************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [web1]
+
+PLAY RECAP *********************************************************************
+web1                       : ok=1    changed=0    unreachable=0    failed=0
+"""
+        handlers = parse_handler_runs(stdout)
+        assert handlers == {}
+
+
+class TestWriteHandlerRuns:
+    """Tests for writing handler runs to file."""
+
+    def test_write_handler_runs_creates_file(self):
+        """Should create handler runs JSON file."""
+        import json
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            grading_dir = Path(tmpdir)
+            converge_result = ConvergeResult(
+                handlers_run={"restart nginx": 1, "reload config": 2}
+            )
+
+            handler_file = write_handler_runs(
+                grading_dir, "baseline", converge_result
+            )
+
+            assert handler_file.exists()
+            assert handler_file.parent.name == ".handler_runs"
+            assert handler_file.name == "baseline.json"
+
+            data = json.loads(handler_file.read_text())
+            assert data == {"restart nginx": 1, "reload config": 2}
+
+    def test_write_handler_runs_empty(self):
+        """Should create file even with no handlers."""
+        import json
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            grading_dir = Path(tmpdir)
+            converge_result = ConvergeResult(handlers_run={})
+
+            handler_file = write_handler_runs(
+                grading_dir, "mutation", converge_result
+            )
+
+            assert handler_file.exists()
+            data = json.loads(handler_file.read_text())
+            assert data == {}

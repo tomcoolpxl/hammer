@@ -20,6 +20,7 @@ from hammer.runner.results import (
     TestResult,
     calculate_phase_score,
     calculate_total_score,
+    write_handler_runs,
 )
 from hammer.runner.ansible import run_playbook, check_idempotence
 from hammer.runner.pytest_runner import run_phase_tests
@@ -259,6 +260,9 @@ def _run_phase(
     (results_dir / "converge_result.json").write_text(
         converge_result.model_dump_json(indent=2)
     )
+
+    # Write handler runs for test verification
+    write_handler_runs(grading_dir, phase, converge_result)
 
     if verbose:
         print(f"[{phase}] Converge: ok={converge_result.ok}, "

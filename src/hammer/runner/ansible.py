@@ -190,6 +190,10 @@ def parse_play_recap(
         totals["rescued"] += rescued
         totals["ignored"] += ignored
 
+    # Parse handler runs
+    # Format: RUNNING HANDLER [handler name] ***
+    handlers_run = parse_handler_runs(stdout)
+
     return ConvergeResult(
         ok=totals["ok"],
         changed=totals["changed"],
@@ -199,9 +203,42 @@ def parse_play_recap(
         rescued=totals["rescued"],
         ignored=totals["ignored"],
         play_recap=play_recap,
+        handlers_run=handlers_run,
         success=success,
         error_message=error_message,
     )
+
+
+def parse_handler_runs(stdout: str) -> Dict[str, int]:
+    """
+    Parse handler execution from ansible-playbook stdout.
+
+    Args:
+        stdout: The stdout from ansible-playbook
+
+    Returns:
+        Dict mapping handler names to run counts
+    """
+    # Match RUNNING HANDLER lines
+    # Format: RUNNING HANDLER [role_name : handler_name] ***
+    # or: RUNNING HANDLER [handler_name] ***
+    # Note: [^\]\n]+ excludes ] and newlines to prevent matching across lines
+    handler_pattern = re.compile(
+        r"RUNNING HANDLER \[([^\]\n]+)\]",
+        re.MULTILINE,
+    )
+
+    handlers_run: Dict[str, int] = {}
+    for match in handler_pattern.finditer(stdout):
+        handler_full = match.group(1)
+        # Strip role prefix if present (e.g., "nginx : restart nginx" -> "restart nginx")
+        if " : " in handler_full:
+            handler_name = handler_full.split(" : ", 1)[1].strip()
+        else:
+            handler_name = handler_full.strip()
+        handlers_run[handler_name] = handlers_run.get(handler_name, 0) + 1
+
+    return handlers_run
 
 
 def check_idempotence(result: ConvergeResult) -> tuple[bool, str]:

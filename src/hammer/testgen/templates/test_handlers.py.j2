@@ -1,0 +1,57 @@
+"""HAMMER Generated Handler Tests.
+
+Assignment: {{ assignment_id }}
+Phase: {{ phase }}
+
+Tests that verify handlers are executed as expected.
+
+NOTE: These tests require the runner to write handler execution data
+to .handler_runs/{{ phase }}.json before running tests.
+"""
+
+import json
+import os
+import pytest
+
+
+def get_handler_runs():
+    """Load handler execution data from the runner."""
+    # Look for handler runs file relative to test directory
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    bundle_dir = os.path.dirname(os.path.dirname(test_dir))
+    handler_file = os.path.join(bundle_dir, ".handler_runs", "{{ phase }}.json")
+
+    if not os.path.exists(handler_file):
+        pytest.skip(f"Handler runs file not found: {handler_file}")
+
+    with open(handler_file, "r") as f:
+        return json.load(f)
+
+
+{% for handler in handlers %}
+@pytest.mark.{{ phase }}
+@pytest.mark.weight({{ handler.weight }})
+def test_handler_{{ handler.name | replace(" ", "_") | replace("-", "_") | lower }}_{{ handler.expected_runs }}():
+    """Verify handler '{{ handler.name }}' runs {{ handler.expected_runs }} during {{ phase }} phase."""
+    handler_runs = get_handler_runs()
+    run_count = handler_runs.get("{{ handler.name }}", 0)
+
+{% if handler.expected_runs == "zero" %}
+    assert run_count == 0, (
+        f"Handler '{{ handler.name }}' should not run during {{ phase }} phase, "
+        f"but ran {run_count} time(s)"
+    )
+{% elif handler.expected_runs == "at_least_once" %}
+    assert run_count >= 1, (
+        f"Handler '{{ handler.name }}' should run at least once during {{ phase }} phase, "
+        f"but ran {run_count} time(s)"
+    )
+{% elif handler.expected_runs == "exactly_once" %}
+    assert run_count == 1, (
+        f"Handler '{{ handler.name }}' should run exactly once during {{ phase }} phase, "
+        f"but ran {run_count} time(s)"
+    )
+{% endif %}
+
+
+{% endfor %}

@@ -21,6 +21,7 @@ from hammer.testgen.behavioral import (
     generate_file_tests,
     generate_firewall_tests,
     generate_http_endpoint_tests,
+    generate_handler_tests,
 )
 from hammer.testgen.reachability import generate_reachability_tests
 
@@ -243,6 +244,18 @@ def _generate_phase_tests(
             tests=http_endpoint_tests,
         )
         path = phase_dir / "test_http.py"
+        path.write_text(content)
+        generated_files.append(path)
+
+    # Handler tests
+    handler_tests = generate_handler_tests(contract)
+    if handler_tests:
+        content = env.get_template("test_handlers.py.j2").render(
+            assignment_id=spec.assignment_id,
+            phase=phase,
+            handlers=handler_tests,
+        )
+        path = phase_dir / "test_handlers.py"
         path.write_text(content)
         generated_files.append(path)
 

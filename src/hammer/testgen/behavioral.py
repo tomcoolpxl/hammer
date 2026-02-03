@@ -16,6 +16,7 @@ from hammer.plan import (
     FileCheck,
     FirewallCheck,
     HttpEndpointCheck,
+    HandlerPlan,
 )
 
 
@@ -215,6 +216,28 @@ def generate_http_endpoint_tests(contract: PhaseContractPlan) -> List[Dict[str, 
             "hosts": http.host_targets,
             "safe_name": _make_safe_name(http.url),
             "weight": http.weight,
+        })
+
+    return tests
+
+
+def generate_handler_tests(contract: PhaseContractPlan) -> List[Dict[str, Any]]:
+    """Generate test data for handler execution checks."""
+    tests = []
+
+    for handler in contract.handlers:
+        # Get the expected runs for this phase
+        phase_expectation = handler.expectations.get(contract.phase)
+        if not phase_expectation:
+            continue
+
+        tests.append({
+            "name": handler.handler_name,
+            "service": handler.service,
+            "action": handler.action,
+            "hosts": handler.host_targets,
+            "expected_runs": phase_expectation.expected_runs,
+            "weight": handler.weight,
         })
 
     return tests
