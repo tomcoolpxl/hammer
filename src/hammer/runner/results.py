@@ -29,6 +29,7 @@ class ConvergeResult(BaseModel):
 
 class TestCaseResult(BaseModel):
     """Result of a single test case."""
+    __test__ = False
 
     name: str
     outcome: str  # "passed", "failed", "skipped", "error"
@@ -39,6 +40,7 @@ class TestCaseResult(BaseModel):
 
 class TestResult(BaseModel):
     """Aggregated test results for a phase."""
+    __test__ = False
 
     passed: int = 0
     failed: int = 0

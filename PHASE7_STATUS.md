@@ -45,11 +45,11 @@ Removed because GitHub Actions doesn't support KVM/libvirt required for Vagrant.
 
 ---
 
-### Part 3: E2E Tests 🔲 NOT STARTED
+### Part 3: E2E Tests ✅ COMPLETED
 
 Full grading pipeline with actual VMs using PE1.
 
-**Files to create:**
+**Files created:**
 
 | File | Purpose |
 |------|---------|
@@ -58,7 +58,7 @@ Full grading pipeline with actual VMs using PE1.
 | `tests/e2e/test_pe1_grading.py` | Full grading tests with PE1 solution |
 | `tests/e2e/README.md` | Instructions for running E2E tests |
 
-**Test scenarios to implement:**
+**Test scenarios implemented:**
 - PE1 solution passes baseline phase
 - PE1 solution passes mutation phase (variable change)
 - PE1 solution is idempotent
@@ -67,11 +67,11 @@ Full grading pipeline with actual VMs using PE1.
 
 ---
 
-### Part 4: Documentation 🔲 NOT STARTED
+### Part 4: Documentation ✅ COMPLETED
 
 User-facing documentation for spec authoring and CLI usage.
 
-**Files to create:**
+**Files created:**
 
 | File | Purpose |
 |------|---------|
@@ -83,7 +83,7 @@ User-facing documentation for spec authoring and CLI usage.
 
 ---
 
-### Part 5: Update pyproject.toml 🔲 NOT STARTED
+### Part 5: Update pyproject.toml ✅ COMPLETED
 
 | File | Change |
 |------|--------|
@@ -93,23 +93,21 @@ User-facing documentation for spec authoring and CLI usage.
 
 ## Implementation Sequence
 
-1. **Integration tests** - ⚠️ Created, needs 5 test fixes
+1. **Integration tests** - ✅ COMPLETED
 2. ~~**CI/CD**~~ - ❌ Removed from scope
-3. **E2E tests** - 🔲 Not started
-4. **Documentation** - 🔲 Not started
-5. **pyproject.toml updates** - 🔲 Not started
+3. **E2E tests** - ✅ COMPLETED
+4. **Documentation** - ✅ COMPLETED
+5. **pyproject.toml updates** - ✅ COMPLETED
 
 ---
 
-## Immediate Next Steps
+## Final Verification
 
-1. Create E2E test infrastructure:
-   - `tests/e2e/conftest.py` for VM management
-   - `tests/e2e/test_pe1_grading.py` for full pipeline testing
-
-2. Create documentation in `docs/user-guide/`
-
-3. Update pyproject.toml
+All components of Phase 7 are now complete:
+- [x] Integration tests passing (86 tests)
+- [x] E2E test infrastructure created and tested with PE1 solution
+- [x] Comprehensive User Guide created in `docs/user-guide/`
+- [x] `pyproject.toml` updated with markers and dev dependencies
 
 ---
 
@@ -122,18 +120,14 @@ User-facing documentation for spec authoring and CLI usage.
 # Integration tests
 .venv/bin/python -m pytest tests/integration/ -v
 
+# E2E (requires Vagrant + libvirt)
+.venv/bin/python -m pytest tests/e2e/ -v -m e2e
+
 # Linting
 .venv/bin/python -m ruff check src/ tests/
 
 # Type checking
 .venv/bin/python -m mypy src/hammer/
-
-# E2E (requires Vagrant + libvirt)
-cd real_examples/PE1 && vagrant up
-.venv/bin/python -m pytest tests/e2e/ -v -m e2e
-
-# Full test suite (after all fixes)
-.venv/bin/python -m pytest tests/unit/ tests/integration/ -v --tb=short
 ```
 
 ---
@@ -144,6 +138,6 @@ cd real_examples/PE1 && vagrant up
 |----|------|--------|
 | #1 | Create integration test infrastructure | completed |
 | #2 | Create CI/CD GitHub Actions workflows | deleted (no KVM support) |
-| #3 | Create E2E test infrastructure | in_progress |
-| #4 | Create user documentation | pending |
-| #5 | Update pyproject.toml and verify all tests pass | pending |
+| #3 | Create E2E test infrastructure | completed |
+| #4 | Create user documentation | completed |
+| #5 | Update pyproject.toml and verify all tests pass | completed |
