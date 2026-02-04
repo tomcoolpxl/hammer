@@ -11,6 +11,8 @@ NonEmptyStr = str
 
 PhaseName = Literal["baseline", "mutation"]
 
+ExecutionPhaseName = Literal["baseline", "mutation", "idempotence"]
+
 VarType = Literal["int", "string", "bool", "list", "dict"]
 
 OverlayKind = Literal["group_vars", "host_vars", "inventory_vars", "extra_vars"]
@@ -246,6 +248,7 @@ class PackageContract(BaseModel):
     name: NonEmptyStr
     state: Literal["present", "absent"]
     node_selector: NodeSelector
+    phases: Optional[List[ExecutionPhaseName]] = None  # None = all phases
     weight: float = Field(default=1.0, ge=0.0)
 
 
@@ -255,6 +258,7 @@ class PipPackageContract(BaseModel):
     state: Literal["present", "absent"] = "present"
     python: Optional[NonEmptyStr] = None  # Python executable, defaults to system python3
     node_selector: NodeSelector
+    phases: Optional[List[ExecutionPhaseName]] = None  # None = all phases
     weight: float = Field(default=1.0, ge=0.0)
 
 
@@ -263,6 +267,7 @@ class ServiceContract(BaseModel):
     enabled: bool
     running: bool
     node_selector: NodeSelector
+    phases: Optional[List[ExecutionPhaseName]] = None  # None = all phases
     weight: float = Field(default=1.0, ge=0.0)
 
 
@@ -276,6 +281,7 @@ class UserContract(BaseModel):
     shell: Optional[NonEmptyStr] = None
     groups: Optional[List[NonEmptyStr]] = None  # Supplementary groups
     node_selector: NodeSelector
+    phases: Optional[List[ExecutionPhaseName]] = None  # None = all phases
     weight: float = Field(default=1.0, ge=0.0)
 
 
@@ -285,6 +291,7 @@ class GroupContract(BaseModel):
     exists: bool = True
     gid: Optional[int] = None
     node_selector: NodeSelector
+    phases: Optional[List[ExecutionPhaseName]] = None  # None = all phases
     weight: float = Field(default=1.0, ge=0.0)
 
 
@@ -308,6 +315,7 @@ class FirewallContract(BaseModel):
     open_ports: List[FirewallPort]
     node_selector: NodeSelector
     firewall_type: FirewallType = "firewalld"  # firewalld or iptables
+    phases: Optional[List[ExecutionPhaseName]] = None  # None = all phases
     weight: float = Field(default=1.0, ge=0.0)
 
 
@@ -324,6 +332,7 @@ class FileContractItem(BaseModel):
 class FilesContract(BaseModel):
     items: List[FileContractItem]
     node_selector: NodeSelector
+    phases: Optional[List[ExecutionPhaseName]] = None  # None = all phases
     weight: float = Field(default=1.0, ge=0.0)
 
 
@@ -333,6 +342,7 @@ class ReachabilityContract(BaseModel):
     protocol: Protocol
     port: PortRef
     expectation: ReachabilityExpectation
+    phases: Optional[List[ExecutionPhaseName]] = None  # None = all phases
     weight: float = Field(default=1.0, ge=0.0)
 
 
@@ -345,6 +355,48 @@ class HttpEndpointContract(BaseModel):
     response_regex: Optional[NonEmptyStr] = None  # Regex pattern to match
     timeout_seconds: int = Field(default=5, ge=1, le=60)
     node_selector: NodeSelector  # Which node to run the test from
+    phases: Optional[List[ExecutionPhaseName]] = None  # None = all phases
+    weight: float = Field(default=1.0, ge=0.0)
+
+
+class ExternalHttpContract(BaseModel):
+    """Contract for verifying HTTP endpoints from external perspective (host or cross-VM).
+
+    Use this when testing web accessibility from outside the target node:
+    - from_host=True: Test from grading host (e.g., via port forwarding)
+    - from_node: Test from another VM in the topology
+    """
+    url: NonEmptyStr  # URL to test (use localhost:port for host, or VM hostname for cross-VM)
+    method: Literal["GET", "POST", "PUT", "DELETE", "HEAD"] = "GET"
+    expected_status: int = Field(default=200, ge=100, le=599)
+    response_contains: Optional[NonEmptyStr] = None
+    response_regex: Optional[NonEmptyStr] = None
+    timeout_seconds: int = Field(default=10, ge=1, le=60)
+    from_host: bool = False  # If True, test from grading host machine
+    from_node: Optional[NodeSelector] = None  # If from_host=False, test from this VM
+    phases: Optional[List[ExecutionPhaseName]] = None
+    weight: float = Field(default=1.0, ge=0.0)
+
+    @model_validator(mode="after")
+    def validate_source(self) -> "ExternalHttpContract":
+        if self.from_host and self.from_node:
+            raise ValueError("Cannot specify both from_host=True and from_node")
+        if not self.from_host and not self.from_node:
+            raise ValueError("Must specify either from_host=True or from_node")
+        return self
+
+
+class OutputContract(BaseModel):
+    """Contract for verifying Ansible output contains expected patterns.
+
+    Use this to check debug messages, registered variable output, or other
+    Ansible playbook output patterns.
+    """
+    pattern: NonEmptyStr  # String or regex pattern to match
+    match_type: Literal["contains", "regex"] = "contains"
+    expected: bool = True  # True = should match, False = should NOT match
+    description: Optional[NonEmptyStr] = None  # Human-readable description
+    phases: Optional[List[ExecutionPhaseName]] = None
     weight: float = Field(default=1.0, ge=0.0)
 
 
@@ -358,6 +410,8 @@ class BehavioralContracts(BaseModel):
     files: Optional[List[FilesContract]] = None
     reachability: Optional[List[ReachabilityContract]] = None
     http_endpoints: Optional[List[HttpEndpointContract]] = None
+    external_http: Optional[List[ExternalHttpContract]] = None
+    output_checks: Optional[List[OutputContract]] = None
 
 
 # -------------------------
@@ -446,6 +500,34 @@ class VaultSpec(BaseModel):
 
 
 # -------------------------
+# Failure policy
+# -------------------------
+
+class FailurePolicy(BaseModel):
+    """Policy for handling expected failures during converge.
+
+    Use this when certain task failures are expected behavior (e.g., testing
+    error handling, intentional failure scenarios).
+    """
+    allow_failures: bool = False  # If True, don't fail phase on task failures
+    max_failures: Optional[int] = None  # Maximum allowed failures (None = unlimited when allow_failures=True)
+    expected_patterns: Optional[List[NonEmptyStr]] = None  # Regex patterns that failures should match
+    # If expected_patterns is set, only failures matching these patterns are allowed
+
+
+# -------------------------
+# Reboot configuration
+# -------------------------
+
+class RebootConfig(BaseModel):
+    """Configuration for rebooting nodes after converge, before tests."""
+    enabled: bool = False
+    nodes: Optional[List[NonEmptyStr]] = None  # None = all nodes
+    timeout: int = Field(default=120, ge=30, le=600)
+    poll_interval: int = Field(default=5, ge=1, le=30)
+
+
+# -------------------------
 # Phase overlays
 # -------------------------
 
@@ -454,6 +536,8 @@ class PhaseOverlay(BaseModel):
     group_vars: Optional[Dict[str, Dict[str, Any]]] = None
     host_vars: Optional[Dict[str, Dict[str, Any]]] = None
     extra_vars: Optional[Dict[str, Any]] = None
+    reboot: Optional[RebootConfig] = None
+    failure_policy: Optional[FailurePolicy] = None
 
 
 class PhaseOverlays(BaseModel):
@@ -478,7 +562,7 @@ class HammerSpec(BaseModel):
     topology: Topology
     entrypoints: Entrypoints
 
-    variable_contracts: List[VariableContract]
+    variable_contracts: Optional[List[VariableContract]] = None
 
     precedence_scenarios: Optional[List[PrecedenceScenario]] = None
 
@@ -499,7 +583,7 @@ class HammerSpec(BaseModel):
     @model_validator(mode="after")
     def semantic_validation(self) -> "HammerSpec":
 
-        var_names = {v.name for v in self.variable_contracts}
+        var_names = {v.name for v in (self.variable_contracts or [])}
 
         # Validate precedence variable references
         if self.precedence_scenarios:
@@ -510,7 +594,7 @@ class HammerSpec(BaseModel):
                     )
 
         # Validate binding index references
-        for idx, var in enumerate(self.variable_contracts):
+        for idx, var in enumerate(self.variable_contracts or []):
             for scen in self.precedence_scenarios or []:
                 if scen.variable == var.name:
                     for b in scen.bindings_to_verify:
@@ -532,9 +616,9 @@ class HammerSpec(BaseModel):
                     "Reachability contracts present but features.reachability is false"
                 )
 
-        # Phase overlay sanity
-        if not self.phase_overlays.baseline:
-            raise ValueError("Baseline phase_overlays must be defined")
+        # Phase overlay sanity - only require baseline if we have variable_contracts
+        if self.variable_contracts and not self.phase_overlays.baseline:
+            raise ValueError("Baseline phase_overlays must be defined when variable_contracts exist")
 
         # Variable overlay coverage
         overlay_vars = set()
@@ -550,7 +634,7 @@ class HammerSpec(BaseModel):
                     for hvars in phase.host_vars.values():
                         overlay_vars |= set(hvars.keys())
 
-        for var in self.variable_contracts:
+        for var in (self.variable_contracts or []):
             if var.name not in overlay_vars:
                 # Allowed: variable only uses student defaults in baseline,
                 # but mutation requires change when bindings exist.
@@ -586,11 +670,27 @@ class HammerSpec(BaseModel):
         for bc in all_bcs:
             check_selector(bc.node_selector)
 
+        # Validate external_http from_node references
+        if self.behavioral_contracts and self.behavioral_contracts.external_http:
+            for ext in self.behavioral_contracts.external_http:
+                if ext.from_node:
+                    check_selector(ext.from_node)
+
         for hc in self.handler_contracts or []:
             check_selector(hc.node_selector)
 
+        # Validate reboot node references
+        for phase_name in ["baseline", "mutation"]:
+            phase_overlay = getattr(self.phase_overlays, phase_name, None)
+            if phase_overlay and phase_overlay.reboot and phase_overlay.reboot.nodes:
+                for node in phase_overlay.reboot.nodes:
+                    if node not in node_names:
+                        raise ValueError(
+                            f"Reboot config in {phase_name} references unknown node '{node}'"
+                        )
+
         # Validate overlay target references
-        for var in self.variable_contracts:
+        for var in (self.variable_contracts or []):
             for target in var.grading_overlay_targets:
                 if target.overlay_kind == "group_vars":
                     if target.target_name not in group_names and target.target_name != "all":

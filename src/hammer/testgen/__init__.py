@@ -21,7 +21,9 @@ from hammer.testgen.behavioral import (
     generate_file_tests,
     generate_firewall_tests,
     generate_http_endpoint_tests,
+    generate_external_http_tests,
     generate_handler_tests,
+    generate_output_tests,
 )
 from hammer.testgen.reachability import generate_reachability_tests
 
@@ -127,17 +129,18 @@ def _generate_phase_tests(
     contract = plan.contracts[phase]
     resolved_vars = _get_resolved_vars(plan, phase)
 
-    # Binding tests
-    binding_tests = generate_binding_tests(spec, contract, phase)
-    if binding_tests:
-        content = env.get_template("test_bindings.py.j2").render(
-            assignment_id=spec.assignment_id,
-            phase=phase,
-            tests=binding_tests,
-        )
-        path = phase_dir / "test_bindings.py"
-        path.write_text(content)
-        generated_files.append(path)
+    # Binding tests (only if variable_contracts exist)
+    if spec.variable_contracts:
+        binding_tests = generate_binding_tests(spec, contract, phase)
+        if binding_tests:
+            content = env.get_template("test_bindings.py.j2").render(
+                assignment_id=spec.assignment_id,
+                phase=phase,
+                tests=binding_tests,
+            )
+            path = phase_dir / "test_bindings.py"
+            path.write_text(content)
+            generated_files.append(path)
 
     # Package tests
     package_tests = generate_package_tests(contract)
@@ -247,6 +250,31 @@ def _generate_phase_tests(
         path.write_text(content)
         generated_files.append(path)
 
+    # External HTTP tests (host-based and VM-based)
+    external_http_tests = generate_external_http_tests(contract)
+
+    # Host-based external HTTP tests
+    if external_http_tests["host_tests"]:
+        content = env.get_template("test_external_http_host.py.j2").render(
+            assignment_id=spec.assignment_id,
+            phase=phase,
+            tests=external_http_tests["host_tests"],
+        )
+        path = phase_dir / "test_external_http_host.py"
+        path.write_text(content)
+        generated_files.append(path)
+
+    # VM-based external HTTP tests
+    if external_http_tests["vm_tests"]:
+        content = env.get_template("test_external_http_vm.py.j2").render(
+            assignment_id=spec.assignment_id,
+            phase=phase,
+            tests=external_http_tests["vm_tests"],
+        )
+        path = phase_dir / "test_external_http_vm.py"
+        path.write_text(content)
+        generated_files.append(path)
+
     # Handler tests
     handler_tests = generate_handler_tests(contract)
     if handler_tests:
@@ -256,6 +284,18 @@ def _generate_phase_tests(
             handlers=handler_tests,
         )
         path = phase_dir / "test_handlers.py"
+        path.write_text(content)
+        generated_files.append(path)
+
+    # Output pattern tests (Ansible debug messages, etc.)
+    output_tests = generate_output_tests(contract)
+    if output_tests:
+        content = env.get_template("test_output.py.j2").render(
+            assignment_id=spec.assignment_id,
+            phase=phase,
+            tests=output_tests,
+        )
+        path = phase_dir / "test_output.py"
         path.write_text(content)
         generated_files.append(path)
 

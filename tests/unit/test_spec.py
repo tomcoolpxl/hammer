@@ -60,11 +60,299 @@ def test_topology_duplicate_nodes():
     with open(FIXTURES_DIR / "valid_full.yaml", "r") as f:
         import yaml
         data = yaml.safe_load(f)
-        
+
     # Duplicate web1
     data["topology"]["nodes"].append(data["topology"]["nodes"][0])
-    
+
     with pytest.raises(ValidationError) as exc_info:
         HammerSpec.model_validate(data)
-        
+
     assert "Duplicate node names in topology" in str(exc_info.value)
+
+
+# -------------------------
+# PE4 Support Tests
+# -------------------------
+
+def test_phases_field_on_behavioral_contracts():
+    """Test that behavioral contracts can have phases field."""
+    with open(FIXTURES_DIR / "valid_full.yaml", "r") as f:
+        import yaml
+        data = yaml.safe_load(f)
+
+    # Add phases to a service contract
+    data["behavioral_contracts"]["services"][0]["phases"] = ["baseline", "mutation"]
+
+    spec = HammerSpec.model_validate(data)
+    assert spec.behavioral_contracts.services[0].phases == ["baseline", "mutation"]
+
+
+def test_phases_field_default_none():
+    """Test that phases field defaults to None (all phases)."""
+    with open(FIXTURES_DIR / "valid_full.yaml", "r") as f:
+        import yaml
+        data = yaml.safe_load(f)
+
+    spec = HammerSpec.model_validate(data)
+    # By default, no phases specified means all phases
+    assert spec.behavioral_contracts.services[0].phases is None
+
+
+def test_reboot_config_valid():
+    """Test that RebootConfig can be added to phase overlays."""
+    with open(FIXTURES_DIR / "valid_full.yaml", "r") as f:
+        import yaml
+        data = yaml.safe_load(f)
+
+    # Add reboot config to mutation phase
+    data["phase_overlays"]["mutation"]["reboot"] = {
+        "enabled": True,
+        "nodes": ["web1"],
+        "timeout": 120,
+        "poll_interval": 5,
+    }
+
+    spec = HammerSpec.model_validate(data)
+    assert spec.phase_overlays.mutation.reboot is not None
+    assert spec.phase_overlays.mutation.reboot.enabled is True
+    assert spec.phase_overlays.mutation.reboot.nodes == ["web1"]
+    assert spec.phase_overlays.mutation.reboot.timeout == 120
+
+
+def test_reboot_config_invalid_node():
+    """Test that reboot config with unknown node is rejected."""
+    with open(FIXTURES_DIR / "valid_full.yaml", "r") as f:
+        import yaml
+        data = yaml.safe_load(f)
+
+    # Add reboot config with invalid node name
+    data["phase_overlays"]["mutation"]["reboot"] = {
+        "enabled": True,
+        "nodes": ["nonexistent_node"],
+        "timeout": 120,
+    }
+
+    with pytest.raises(ValidationError) as exc_info:
+        HammerSpec.model_validate(data)
+
+    assert "Reboot config in mutation references unknown node 'nonexistent_node'" in str(exc_info.value)
+
+
+def test_reboot_config_timeout_bounds():
+    """Test that reboot timeout must be within bounds."""
+    with open(FIXTURES_DIR / "valid_full.yaml", "r") as f:
+        import yaml
+        data = yaml.safe_load(f)
+
+    # Timeout too low
+    data["phase_overlays"]["mutation"]["reboot"] = {
+        "enabled": True,
+        "timeout": 10,  # min is 30
+    }
+
+    with pytest.raises(ValidationError):
+        HammerSpec.model_validate(data)
+
+
+def test_optional_variable_contracts():
+    """Test that variable_contracts can be omitted (None)."""
+    with open(FIXTURES_DIR / "valid_full.yaml", "r") as f:
+        import yaml
+        data = yaml.safe_load(f)
+
+    # Remove variable contracts and related items
+    del data["variable_contracts"]
+    del data["precedence_scenarios"]
+    del data["handler_contracts"]  # has variable_changed trigger
+    data["features"]["handlers"] = False
+
+    # Remove firewall with port var reference
+    data["behavioral_contracts"]["firewall"] = []
+
+    # Remove reachability with port var reference
+    data["behavioral_contracts"]["reachability"] = []
+
+    spec = HammerSpec.model_validate(data)
+    assert spec.variable_contracts is None
+
+
+def test_pe4_spec_validates():
+    """Test that the PE4 spec file validates successfully."""
+    spec_path = PROJECT_ROOT / "real_examples" / "PE4" / "spec.yaml"
+    spec = load_spec_from_file(spec_path)
+
+    assert spec.assignment_id == "pe4-ansible-exam"
+    assert spec.variable_contracts is None
+    assert spec.behavioral_contracts is not None
+    assert spec.phase_overlays.mutation.reboot is not None
+    assert spec.phase_overlays.mutation.reboot.enabled is True
+
+
+def test_external_http_contract_from_host():
+    """Test ExternalHttpContract with from_host=True."""
+    with open(FIXTURES_DIR / "valid_full.yaml", "r") as f:
+        import yaml
+        data = yaml.safe_load(f)
+
+    # Add external_http contract from host
+    data["behavioral_contracts"]["external_http"] = [
+        {
+            "url": "http://localhost:8080/",
+            "from_host": True,
+            "expected_status": 200,
+        }
+    ]
+
+    spec = HammerSpec.model_validate(data)
+    assert spec.behavioral_contracts.external_http is not None
+    assert len(spec.behavioral_contracts.external_http) == 1
+    assert spec.behavioral_contracts.external_http[0].from_host is True
+
+
+def test_external_http_contract_from_node():
+    """Test ExternalHttpContract with from_node selector."""
+    with open(FIXTURES_DIR / "valid_full.yaml", "r") as f:
+        import yaml
+        data = yaml.safe_load(f)
+
+    # Add external_http contract from another VM
+    data["behavioral_contracts"]["external_http"] = [
+        {
+            "url": "http://web1:80/",
+            "from_node": {"host": "app1"},
+            "expected_status": 200,
+            "response_contains": "Welcome",
+        }
+    ]
+
+    spec = HammerSpec.model_validate(data)
+    assert spec.behavioral_contracts.external_http is not None
+    assert spec.behavioral_contracts.external_http[0].from_host is False
+    assert spec.behavioral_contracts.external_http[0].from_node.host == "app1"
+
+
+def test_external_http_contract_invalid_both():
+    """Test that specifying both from_host and from_node fails."""
+    with open(FIXTURES_DIR / "valid_full.yaml", "r") as f:
+        import yaml
+        data = yaml.safe_load(f)
+
+    data["behavioral_contracts"]["external_http"] = [
+        {
+            "url": "http://localhost:8080/",
+            "from_host": True,
+            "from_node": {"host": "app1"},  # Can't have both
+        }
+    ]
+
+    with pytest.raises(ValidationError) as exc_info:
+        HammerSpec.model_validate(data)
+
+    assert "Cannot specify both from_host=True and from_node" in str(exc_info.value)
+
+
+def test_external_http_contract_invalid_neither():
+    """Test that specifying neither from_host nor from_node fails."""
+    with open(FIXTURES_DIR / "valid_full.yaml", "r") as f:
+        import yaml
+        data = yaml.safe_load(f)
+
+    data["behavioral_contracts"]["external_http"] = [
+        {
+            "url": "http://localhost:8080/",
+            # Neither from_host nor from_node specified
+        }
+    ]
+
+    with pytest.raises(ValidationError) as exc_info:
+        HammerSpec.model_validate(data)
+
+    assert "Must specify either from_host=True or from_node" in str(exc_info.value)
+
+
+def test_output_contract_contains():
+    """Test OutputContract with contains match type."""
+    with open(FIXTURES_DIR / "valid_full.yaml", "r") as f:
+        import yaml
+        data = yaml.safe_load(f)
+
+    data["behavioral_contracts"]["output_checks"] = [
+        {
+            "pattern": "Server configured successfully",
+            "match_type": "contains",
+            "expected": True,
+            "description": "Check success message",
+            "weight": 1.0,
+        }
+    ]
+
+    spec = HammerSpec.model_validate(data)
+    assert spec.behavioral_contracts.output_checks is not None
+    assert len(spec.behavioral_contracts.output_checks) == 1
+    assert spec.behavioral_contracts.output_checks[0].match_type == "contains"
+
+
+def test_output_contract_regex():
+    """Test OutputContract with regex match type."""
+    with open(FIXTURES_DIR / "valid_full.yaml", "r") as f:
+        import yaml
+        data = yaml.safe_load(f)
+
+    data["behavioral_contracts"]["output_checks"] = [
+        {
+            "pattern": r"Port: \d+",
+            "match_type": "regex",
+            "expected": True,
+        }
+    ]
+
+    spec = HammerSpec.model_validate(data)
+    assert spec.behavioral_contracts.output_checks[0].match_type == "regex"
+
+
+def test_output_contract_expected_false():
+    """Test OutputContract for checking absence of pattern."""
+    with open(FIXTURES_DIR / "valid_full.yaml", "r") as f:
+        import yaml
+        data = yaml.safe_load(f)
+
+    data["behavioral_contracts"]["output_checks"] = [
+        {
+            "pattern": "FAILED",
+            "expected": False,  # Should NOT be in output
+            "description": "No failures expected",
+        }
+    ]
+
+    spec = HammerSpec.model_validate(data)
+    assert spec.behavioral_contracts.output_checks[0].expected is False
+
+
+def test_failure_policy_allow_failures():
+    """Test FailurePolicy configuration."""
+    with open(FIXTURES_DIR / "valid_full.yaml", "r") as f:
+        import yaml
+        data = yaml.safe_load(f)
+
+    data["phase_overlays"]["baseline"]["failure_policy"] = {
+        "allow_failures": True,
+        "max_failures": 2,
+        "expected_patterns": ["Connection refused", "timeout"],
+    }
+
+    spec = HammerSpec.model_validate(data)
+    policy = spec.phase_overlays.baseline.failure_policy
+    assert policy is not None
+    assert policy.allow_failures is True
+    assert policy.max_failures == 2
+    assert "Connection refused" in policy.expected_patterns
+
+
+def test_failure_policy_default():
+    """Test that failure_policy defaults to None (strict mode)."""
+    with open(FIXTURES_DIR / "valid_full.yaml", "r") as f:
+        import yaml
+        data = yaml.safe_load(f)
+
+    spec = HammerSpec.model_validate(data)
+    assert spec.phase_overlays.baseline.failure_policy is None

@@ -90,13 +90,123 @@ def test_handler_expectations(full_spec):
 def test_binding_checks_value_propagation(full_spec):
     """Verify that binding checks get the resolved variable value."""
     plan = build_execution_plan(full_spec)
-    
+
     # In baseline, http_port is 8080
     base_bindings = plan.contracts["baseline"].bindings
     port_binding = next(b for b in base_bindings if b.binding_target.get("service") == "nginx")
     assert port_binding.expected_value == 8080
-    
+
     # In mutation, http_port is 9090
     mut_bindings = plan.contracts["mutation"].bindings
     port_binding_mut = next(b for b in mut_bindings if b.binding_target.get("service") == "nginx")
     assert port_binding_mut.expected_value == 9090
+
+
+# -------------------------
+# PE4 Support Tests
+# -------------------------
+
+def test_phase_filtering_baseline_only():
+    """Test that contracts with phases=[baseline] only appear in baseline."""
+    from hammer.plan import _applies_to_phase
+
+    # Contract only for baseline
+    assert _applies_to_phase(["baseline"], "baseline") is True
+    assert _applies_to_phase(["baseline"], "mutation") is False
+    assert _applies_to_phase(["baseline"], "idempotence") is False
+
+
+def test_phase_filtering_mutation_idempotence():
+    """Test that contracts with phases=[mutation, idempotence] work correctly."""
+    from hammer.plan import _applies_to_phase
+
+    # Contract for mutation and idempotence
+    assert _applies_to_phase(["mutation", "idempotence"], "baseline") is False
+    assert _applies_to_phase(["mutation", "idempotence"], "mutation") is True
+    assert _applies_to_phase(["mutation", "idempotence"], "idempotence") is True
+
+
+def test_phase_filtering_none_means_all():
+    """Test that phases=None means all phases."""
+    from hammer.plan import _applies_to_phase
+
+    # None means all phases
+    assert _applies_to_phase(None, "baseline") is True
+    assert _applies_to_phase(None, "mutation") is True
+    assert _applies_to_phase(None, "idempotence") is True
+
+
+def test_empty_variable_contracts():
+    """Test that plan building works with no variable_contracts."""
+    spec_path = FIXTURES_DIR.parent.parent / "real_examples" / "PE4" / "spec.yaml"
+    pe4_spec = load_spec_from_file(spec_path)
+
+    plan = build_execution_plan(pe4_spec)
+
+    # Should have no bindings
+    assert len(plan.contracts["baseline"].bindings) == 0
+    assert len(plan.contracts["mutation"].bindings) == 0
+    assert len(plan.contracts["idempotence"].bindings) == 0
+
+    # Should still have behavioral contracts
+    # Note: Some may be filtered by phase
+    assert plan.contracts["baseline"] is not None
+    assert plan.contracts["mutation"] is not None
+
+
+def test_phase_specific_files_contract():
+    """Test that phase-specific file contracts are filtered correctly."""
+    spec_path = FIXTURES_DIR.parent.parent / "real_examples" / "PE4" / "spec.yaml"
+    pe4_spec = load_spec_from_file(spec_path)
+
+    plan = build_execution_plan(pe4_spec)
+
+    # In baseline, the second_run.txt absent check should be present
+    baseline_files = plan.contracts["baseline"].files
+
+    # Find the check for second_run.txt in baseline
+    baseline_absent = any(
+        any(item.get("path") == "/opt/second_run.txt" and item.get("present") is False
+            for item in fc.items)
+        for fc in baseline_files
+    )
+    assert baseline_absent, "Baseline should check for absent second_run.txt"
+
+    # In mutation, second_run.txt should be expected to be present
+    mutation_files = plan.contracts["mutation"].files
+
+    # The absent check should NOT be in mutation
+    mutation_absent = any(
+        any(item.get("path") == "/opt/second_run.txt" and item.get("present") is False
+            for item in fc.items)
+        for fc in mutation_files
+    )
+    assert not mutation_absent, "Mutation should NOT check for absent second_run.txt"
+
+    # The present check should be in mutation
+    mutation_present = any(
+        any(item.get("path") == "/opt/second_run.txt" and item.get("present") is True
+            for item in fc.items)
+        for fc in mutation_files
+    )
+    assert mutation_present, "Mutation should check for present second_run.txt"
+
+
+def test_phase_specific_service_contract():
+    """Test that myhealthcheck service is only checked in mutation/idempotence."""
+    spec_path = FIXTURES_DIR.parent.parent / "real_examples" / "PE4" / "spec.yaml"
+    pe4_spec = load_spec_from_file(spec_path)
+
+    plan = build_execution_plan(pe4_spec)
+
+    # Service should NOT be in baseline
+    baseline_services = [s.name for s in plan.contracts["baseline"].services]
+    assert "myhealthcheck" not in baseline_services
+
+    # Service SHOULD be in mutation
+    mutation_services = [s.name for s in plan.contracts["mutation"].services]
+    assert "myhealthcheck" in mutation_services
+
+    # Service SHOULD be in idempotence
+    idempotence_services = [s.name for s in plan.contracts["idempotence"].services]
+    assert "myhealthcheck" in idempotence_services

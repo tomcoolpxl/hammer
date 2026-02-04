@@ -39,6 +39,10 @@ def generate_binding_tests(
     """
     tests = []
 
+    # Return early if no variable contracts
+    if not spec.variable_contracts:
+        return tests
+
     # Group bindings by variable and host
     for binding in contract.bindings:
         binding_type = binding.binding_type
@@ -124,6 +128,10 @@ def _get_hosts_for_binding(spec: HammerSpec, binding: BindingCheck) -> List[str]
     playbook actually uses the variable, which is typically determined
     by the group scope, not by extra_vars which just override values.
     """
+    # Return early if no variable contracts
+    if not spec.variable_contracts:
+        return []
+
     # Find the variable contract
     var_contract = None
     for vc in spec.variable_contracts:

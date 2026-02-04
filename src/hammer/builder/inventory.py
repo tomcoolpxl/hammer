@@ -83,7 +83,7 @@ def write_student_group_vars(
 
     # Write defaults for each variable contract as group_vars/all.yml
     all_vars: Dict[str, Any] = {}
-    for var in spec.variable_contracts:
+    for var in (spec.variable_contracts or []):
         all_vars[var.name] = var.defaults.student
 
     if all_vars:

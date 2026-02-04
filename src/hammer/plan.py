@@ -123,6 +123,28 @@ class HttpEndpointCheck(BaseModel):
     weight: float
 
 
+class ExternalHttpCheck(BaseModel):
+    """HTTP check from external perspective (host or cross-VM)."""
+    url: str
+    method: str
+    expected_status: int
+    response_contains: str | None
+    response_regex: str | None
+    timeout_seconds: int
+    from_host: bool  # If True, run from grading host
+    from_node_targets: List[str] | None  # If from_host=False, list of VMs to run from
+    weight: float
+
+
+class OutputCheck(BaseModel):
+    """Check for patterns in Ansible output."""
+    pattern: str
+    match_type: str  # "contains" or "regex"
+    expected: bool  # True = should match, False = should NOT match
+    description: str | None
+    weight: float
+
+
 # -------------------------
 # Handler plan
 # -------------------------
@@ -157,6 +179,8 @@ class PhaseContractPlan(BaseModel):
     files: List[FileCheck]
     reachability: List[ReachabilityCheck]
     http_endpoints: List[HttpEndpointCheck]
+    external_http: List[ExternalHttpCheck]
+    output_checks: List[OutputCheck]
     handlers: List[HandlerPlan]
 
 
@@ -217,7 +241,7 @@ def build_phase_variable_plan(spec: HammerSpec, phase_name: ExecutionPhaseName) 
 
     resolved = {}
 
-    for var in spec.variable_contracts:
+    for var in (spec.variable_contracts or []):
         value = var.defaults.student
         source = "default"
 
@@ -266,6 +290,9 @@ def build_binding_checks(spec: HammerSpec, phase_vars: PhaseVariablePlan) -> Lis
 
     checks = []
 
+    if not spec.variable_contracts:
+        return checks
+
     for var in spec.variable_contracts:
         resolved_var = phase_vars.resolved[var.name]
 
@@ -296,9 +323,16 @@ class BehavioralChecks(BaseModel):
     files: List[FileCheck]
     reachability: List[ReachabilityCheck]
     http_endpoints: List[HttpEndpointCheck]
+    external_http: List[ExternalHttpCheck]
+    output_checks: List[OutputCheck]
 
 
-def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> BehavioralChecks:
+def _applies_to_phase(contract_phases: List[str] | None, current_phase: str) -> bool:
+    """Check if contract applies to current phase. None means all phases."""
+    return contract_phases is None or current_phase in contract_phases
+
+
+def build_behavioral_checks(spec: HammerSpec, topology: Topology, phase: ExecutionPhaseName) -> BehavioralChecks:
 
     packages: List[PackageCheck] = []
     pip_packages: List[PipPackageCheck] = []
@@ -309,6 +343,8 @@ def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> BehavioralC
     files: List[FileCheck] = []
     reachability: List[ReachabilityCheck] = []
     http_endpoints: List[HttpEndpointCheck] = []
+    external_http: List[ExternalHttpCheck] = []
+    output_checks: List[OutputCheck] = []
 
     bc = spec.behavioral_contracts
     if not bc:
@@ -322,10 +358,14 @@ def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> BehavioralC
             files=files,
             reachability=reachability,
             http_endpoints=http_endpoints,
+            external_http=external_http,
+            output_checks=output_checks,
         )
 
     if bc.packages:
         for p in bc.packages:
+            if not _applies_to_phase(p.phases, phase):
+                continue
             packages.append(
                 PackageCheck(
                     host_targets=resolve_node_selector(p.node_selector, topology),
@@ -337,6 +377,8 @@ def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> BehavioralC
 
     if bc.pip_packages:
         for p in bc.pip_packages:
+            if not _applies_to_phase(p.phases, phase):
+                continue
             pip_packages.append(
                 PipPackageCheck(
                     host_targets=resolve_node_selector(p.node_selector, topology),
@@ -349,6 +391,8 @@ def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> BehavioralC
 
     if bc.services:
         for s in bc.services:
+            if not _applies_to_phase(s.phases, phase):
+                continue
             services.append(
                 ServiceCheck(
                     host_targets=resolve_node_selector(s.node_selector, topology),
@@ -361,6 +405,8 @@ def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> BehavioralC
 
     if bc.users:
         for u in bc.users:
+            if not _applies_to_phase(u.phases, phase):
+                continue
             users.append(
                 UserCheck(
                     host_targets=resolve_node_selector(u.node_selector, topology),
@@ -377,6 +423,8 @@ def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> BehavioralC
 
     if bc.groups:
         for g in bc.groups:
+            if not _applies_to_phase(g.phases, phase):
+                continue
             groups.append(
                 GroupCheck(
                     host_targets=resolve_node_selector(g.node_selector, topology),
@@ -389,6 +437,8 @@ def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> BehavioralC
 
     if bc.firewall:
         for f in bc.firewall:
+            if not _applies_to_phase(f.phases, phase):
+                continue
             firewall.append(
                 FirewallCheck(
                     host_targets=resolve_node_selector(f.node_selector, topology),
@@ -400,6 +450,8 @@ def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> BehavioralC
 
     if bc.files:
         for fc in bc.files:
+            if not _applies_to_phase(fc.phases, phase):
+                continue
             files.append(
                 FileCheck(
                     host_targets=resolve_node_selector(fc.node_selector, topology),
@@ -410,6 +462,8 @@ def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> BehavioralC
 
     if bc.reachability:
         for r in bc.reachability:
+            if not _applies_to_phase(r.phases, phase):
+                continue
             reachability.append(
                 ReachabilityCheck(
                     from_host=r.from_host,
@@ -423,6 +477,8 @@ def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> BehavioralC
 
     if bc.http_endpoints:
         for h in bc.http_endpoints:
+            if not _applies_to_phase(h.phases, phase):
+                continue
             http_endpoints.append(
                 HttpEndpointCheck(
                     host_targets=resolve_node_selector(h.node_selector, topology),
@@ -436,6 +492,38 @@ def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> BehavioralC
                 )
             )
 
+    if bc.external_http:
+        for ext in bc.external_http:
+            if not _applies_to_phase(ext.phases, phase):
+                continue
+            external_http.append(
+                ExternalHttpCheck(
+                    url=ext.url,
+                    method=ext.method,
+                    expected_status=ext.expected_status,
+                    response_contains=ext.response_contains,
+                    response_regex=ext.response_regex,
+                    timeout_seconds=ext.timeout_seconds,
+                    from_host=ext.from_host,
+                    from_node_targets=resolve_node_selector(ext.from_node, topology) if ext.from_node else None,
+                    weight=ext.weight,
+                )
+            )
+
+    if bc.output_checks:
+        for out in bc.output_checks:
+            if not _applies_to_phase(out.phases, phase):
+                continue
+            output_checks.append(
+                OutputCheck(
+                    pattern=out.pattern,
+                    match_type=out.match_type,
+                    expected=out.expected,
+                    description=out.description,
+                    weight=out.weight,
+                )
+            )
+
     return BehavioralChecks(
         packages=packages,
         pip_packages=pip_packages,
@@ -446,6 +534,8 @@ def build_behavioral_checks(spec: HammerSpec, topology: Topology) -> BehavioralC
         files=files,
         reachability=reachability,
         http_endpoints=http_endpoints,
+        external_http=external_http,
+        output_checks=output_checks,
     )
 
 
@@ -493,7 +583,7 @@ def build_phase_contract_plan(spec: HammerSpec, topology: Topology, phase_name: 
 
     bindings = build_binding_checks(spec, phase_vars)
 
-    behavioral = build_behavioral_checks(spec, topology)
+    behavioral = build_behavioral_checks(spec, topology, phase_name)
 
     handlers = build_handler_plans(spec, topology)
 
@@ -509,6 +599,8 @@ def build_phase_contract_plan(spec: HammerSpec, topology: Topology, phase_name: 
         files=behavioral.files,
         reachability=behavioral.reachability,
         http_endpoints=behavioral.http_endpoints,
+        external_http=behavioral.external_http,
+        output_checks=behavioral.output_checks,
         handlers=handlers,
     )
 

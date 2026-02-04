@@ -221,6 +221,37 @@ def generate_http_endpoint_tests(contract: PhaseContractPlan) -> List[Dict[str, 
     return tests
 
 
+def generate_external_http_tests(contract: PhaseContractPlan) -> Dict[str, List[Dict[str, Any]]]:
+    """Generate test data for external HTTP checks.
+
+    Returns a dict with two keys:
+    - 'host_tests': Tests to run from the grading host
+    - 'vm_tests': Tests to run from VMs (with from_node)
+    """
+    host_tests = []
+    vm_tests = []
+
+    for ext in contract.external_http:
+        test_data = {
+            "url": ext.url,
+            "method": ext.method,
+            "expected_status": ext.expected_status,
+            "response_contains": ext.response_contains,
+            "response_regex": ext.response_regex,
+            "timeout_seconds": ext.timeout_seconds,
+            "safe_name": _make_safe_name(ext.url),
+            "weight": ext.weight,
+        }
+
+        if ext.from_host:
+            host_tests.append(test_data)
+        elif ext.from_node_targets:
+            test_data["hosts"] = ext.from_node_targets
+            vm_tests.append(test_data)
+
+    return {"host_tests": host_tests, "vm_tests": vm_tests}
+
+
 def generate_handler_tests(contract: PhaseContractPlan) -> List[Dict[str, Any]]:
     """Generate test data for handler execution checks."""
     tests = []
@@ -238,6 +269,32 @@ def generate_handler_tests(contract: PhaseContractPlan) -> List[Dict[str, Any]]:
             "hosts": handler.host_targets,
             "expected_runs": phase_expectation.expected_runs,
             "weight": handler.weight,
+        })
+
+    return tests
+
+
+def generate_output_tests(contract: PhaseContractPlan) -> List[Dict[str, Any]]:
+    """Generate test data for Ansible output pattern checks."""
+    tests = []
+
+    for idx, check in enumerate(contract.output_checks):
+        # Create a safe name from description or pattern
+        if check.description:
+            safe_name = _make_safe_name(check.description)
+        else:
+            safe_name = _make_safe_name(check.pattern[:30])
+
+        # Ensure uniqueness
+        safe_name = f"{safe_name}_{idx}"
+
+        tests.append({
+            "pattern": check.pattern,
+            "match_type": check.match_type,
+            "expected": check.expected,
+            "description": check.description or check.pattern,
+            "safe_name": safe_name,
+            "weight": check.weight,
         })
 
     return tests

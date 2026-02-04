@@ -25,6 +25,7 @@ from hammer.runner.results import (
 from hammer.runner.ansible import run_playbook, check_idempotence
 from hammer.runner.pytest_runner import run_phase_tests
 from hammer.runner.snapshot import write_snapshot_playbook
+from hammer.runner.reboot import reboot_nodes
 
 
 __all__ = ["grade_assignment", "GradeReport"]
@@ -198,6 +199,59 @@ def _setup_student_files(
                     shutil.copy2(src, dst)
 
 
+def _check_failure_policy(
+    converge_result: ConvergeResult,
+    converge_log: str,
+    policy,
+    verbose: bool = False,
+) -> bool:
+    """
+    Check if failures are allowed by the failure policy.
+
+    Args:
+        converge_result: The converge result
+        converge_log: The full converge log output
+        policy: The FailurePolicy from phase overlay
+        verbose: Enable verbose output
+
+    Returns:
+        True if failures are allowed by policy
+    """
+    import re
+
+    if not policy.allow_failures:
+        return False
+
+    # Check max_failures limit
+    if policy.max_failures is not None:
+        if converge_result.failed > policy.max_failures:
+            if verbose:
+                print(f"  Failures ({converge_result.failed}) exceed max_failures ({policy.max_failures})")
+            return False
+
+    # Check expected_patterns if specified
+    if policy.expected_patterns:
+        # Extract failure messages from log
+        # Look for "fatal:" or "FAILED!" lines
+        failure_pattern = re.compile(r"(fatal:.*|FAILED!.*)", re.MULTILINE | re.IGNORECASE)
+        failure_messages = failure_pattern.findall(converge_log)
+
+        if failure_messages:
+            # Check that at least one expected pattern matches each failure
+            for failure_msg in failure_messages:
+                matched = False
+                for pattern in policy.expected_patterns:
+                    if re.search(pattern, failure_msg, re.IGNORECASE):
+                        matched = True
+                        break
+                if not matched:
+                    if verbose:
+                        print(f"  Unexpected failure: {failure_msg[:80]}...")
+                    return False
+
+    return True
+
+
 def _run_phase(
     spec: HammerSpec,
     plan: ExecutionPlan,
@@ -267,6 +321,57 @@ def _run_phase(
     if verbose:
         print(f"[{phase}] Converge: ok={converge_result.ok}, "
               f"changed={converge_result.changed}, failed={converge_result.failed}")
+
+    # Check for failure policy and reboot configuration
+    overlay_phase_name = "mutation" if phase == "idempotence" else phase
+    phase_overlay = getattr(spec.phase_overlays, overlay_phase_name, None)
+
+    # Apply failure policy if configured
+    if phase_overlay and phase_overlay.failure_policy:
+        policy = phase_overlay.failure_policy
+        failures_allowed = _check_failure_policy(
+            converge_result, converge_log, policy, verbose
+        )
+        if failures_allowed:
+            # Mark as successful despite failures - they were expected
+            converge_result = ConvergeResult(
+                ok=converge_result.ok,
+                changed=converge_result.changed,
+                failed=converge_result.failed,
+                unreachable=converge_result.unreachable,
+                skipped=converge_result.skipped,
+                rescued=converge_result.rescued,
+                ignored=converge_result.ignored,
+                play_recap=converge_result.play_recap,
+                handlers_run=converge_result.handlers_run,
+                success=True,  # Override to success
+                error_message=None,
+            )
+            if verbose:
+                print(f"[{phase}] Failures allowed by policy")
+
+    if phase_overlay and phase_overlay.reboot and phase_overlay.reboot.enabled:
+        if verbose:
+            print(f"\n[{phase}] Rebooting nodes...")
+
+        reboot_results = reboot_nodes(
+            inventory_path=inventory_path,
+            nodes=phase_overlay.reboot.nodes,
+            timeout=phase_overlay.reboot.timeout,
+            poll_interval=phase_overlay.reboot.poll_interval,
+        )
+
+        # Log results and check for failures
+        for node, result in reboot_results.items():
+            if not result.success:
+                if verbose:
+                    print(f"[{phase}] Reboot FAILED for {node}: {result.error}")
+                # Save reboot failure info
+                (results_dir / "reboot_failure.txt").write_text(
+                    f"Node: {node}\nError: {result.error}\n"
+                )
+            elif verbose:
+                print(f"[{phase}] {node} rebooted in {result.duration:.1f}s")
 
     # Special handling for idempotence phase
     if phase == "idempotence":

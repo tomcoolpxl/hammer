@@ -4,7 +4,7 @@
 
 **HAMMER** (Hands-on Ansible Multi-node Machine Evaluation Runner) is a system for deterministic assignment authoring, generation, and auto-grading for Ansible labs. It targets **Vagrant** + **libvirt/KVM** + **AlmaLinux 9** environments.
 
-The core goal is to generate complete student bundles and grading bundles from a single declarative YAML specification, ensuring reproducibility and rigorous auto-grading via variable mutation and precedence checks.
+The core goal is to generate complete student bundles and grading bundles from a single declarative YAML specification, ensuring reproducibility and rigorous auto-grading via variable mutation, behavioral verification, and precedence checks.
 
 ## Key Documents & Structure
 
@@ -44,17 +44,163 @@ The system follows a pipeline architecture:
 
 ## Current Status
 
-**Phases 1-4 Complete.** The following is implemented and tested:
+**All core phases complete.** The following is implemented and tested:
 
 *   `hammer validate --spec FILE` - Validates spec against Pydantic models
 *   `hammer build --spec FILE --out DIR` - Generates student/grading bundles with:
     *   Vagrantfile, inventory, group_vars, host_vars
     *   Phase overlays (baseline/mutation)
     *   Generated pytest/testinfra tests for all phases
+*   `hammer grade` - Full grading pipeline with converge/verify/report
 *   Full integration test verified: `vagrant up`, `ansible all -m ping`, `vagrant destroy`
 
-## Next Steps (Implementation)
+## Feature Summary
+
+### Core Features
+- **Variable Contracts**: Test variable mutation and precedence
+- **Behavioral Contracts**: Packages, services, files, users, groups, firewall, HTTP endpoints
+- **Three-Phase Testing**: Baseline, mutation, idempotence
+- **Deterministic Builds**: Same spec + seed = identical environment
+
+### Advanced Features (PE4 Support)
+
+| Feature | Description |
+|---------|-------------|
+| **Phase-Specific Contracts** | `phases` field on all behavioral contracts to filter by execution phase |
+| **Reboot Testing** | `RebootConfig` in phase overlays to reboot nodes after converge |
+| **Optional variable_contracts** | Pure behavioral testing without variable mutation |
+| **External HTTP Testing** | `ExternalHttpContract` for host-to-VM or cross-VM HTTP verification |
+| **Output Verification** | `OutputContract` to verify Ansible debug messages and output patterns |
+| **Failure Policy** | `FailurePolicy` to allow expected failures during converge |
+
+## Contract Types
+
+### Behavioral Contracts
+
+| Contract | Purpose |
+|----------|---------|
+| `packages` | Verify package installation state |
+| `pip_packages` | Verify pip package installation |
+| `services` | Verify service enabled/running state |
+| `users` | Verify user existence and properties |
+| `groups` | Verify group existence |
+| `files` | Verify file existence, permissions, content |
+| `firewall` | Verify firewall port rules |
+| `reachability` | Verify network connectivity between nodes |
+| `http_endpoints` | Verify HTTP endpoints from within VMs |
+| `external_http` | Verify HTTP from host or cross-VM |
+| `output_checks` | Verify Ansible output patterns |
+
+### Phase Overlay Options
+
+| Option | Description |
+|--------|-------------|
+| `group_vars` | Variables scoped to groups |
+| `host_vars` | Variables scoped to hosts |
+| `extra_vars` | Extra vars for ansible-playbook |
+| `reboot` | Reboot configuration after converge |
+| `failure_policy` | Expected failure handling |
+
+## Example Spec (PE4-style)
+
+```yaml
+assignment_id: "pe4-ansible-exam"
+spec_version: "1.0"
+seed: 42
+provider: "libvirt"
+os: "almalinux9"
+
+features:
+  handlers: false
+
+topology:
+  domain: "example.local"
+  nodes:
+    - name: "server0"
+      groups: ["servers"]
+      resources:
+        cpu: 1
+        ram_mb: 1024
+      forwarded_ports:
+        - host_port: 8888
+          guest_port: 80
+          protocol: tcp
+
+entrypoints:
+  playbook_path: "playbook.yml"
+
+# No variable contracts - pure behavioral testing
+# variable_contracts: omitted
+
+behavioral_contracts:
+  users:
+    - name: "appuser"
+      exists: true
+      groups: ["wheel"]
+      node_selector: { host: "server0" }
+
+  services:
+    - name: "myservice"
+      enabled: true
+      running: true
+      node_selector: { host: "server0" }
+      phases: [mutation, idempotence]  # Only after reboot
+
+  files:
+    - items:
+        - path: "/opt/first_run.txt"
+          present: true
+      node_selector: { host: "server0" }
+
+    - items:
+        - path: "/opt/second_run.txt"
+          present: false
+      node_selector: { host: "server0" }
+      phases: [baseline]  # Only check in baseline
+
+    - items:
+        - path: "/opt/second_run.txt"
+          present: true
+      node_selector: { host: "server0" }
+      phases: [mutation, idempotence]  # Check after 2nd run
+
+  external_http:
+    - url: "http://localhost:8888/"
+      from_host: true
+      expected_status: 200
+      phases: [mutation]
+
+  output_checks:
+    - pattern: "Configuration complete"
+      match_type: contains
+      expected: true
+    - pattern: "FAILED"
+      expected: false
+
+phase_overlays:
+  baseline:
+    group_vars: {}
+
+  mutation:
+    group_vars: {}
+    reboot:
+      enabled: true
+      nodes: [server0]
+      timeout: 120
+    failure_policy:
+      allow_failures: true
+      max_failures: 1
+      expected_patterns: ["Connection refused"]
+
+idempotence:
+  required: true
+```
+
+## Next Steps
 
 Please refer to **`docs/planning/IMPLEMENTATION_ROADMAP.md`** for the detailed step-by-step plan.
 
-The immediate focus is **Phase 5: The "Grade" Command (Runner)**.
+Current focus areas:
+- End-to-end testing with real assignments
+- Documentation and examples
+- CI/CD integration

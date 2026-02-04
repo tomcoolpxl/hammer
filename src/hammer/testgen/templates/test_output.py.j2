@@ -1,0 +1,58 @@
+"""HAMMER Generated Ansible Output Tests.
+
+Assignment: {{ assignment_id }}
+Phase: {{ phase }}
+
+Tests that verify patterns in Ansible playbook output.
+"""
+
+import pytest
+import re
+from pathlib import Path
+
+
+def _get_converge_log() -> str:
+    """Load the converge log for this phase."""
+    # The converge log is stored in the results directory
+    # During test execution, we look for it relative to the test file
+    results_dir = Path(__file__).parent.parent.parent.parent / "results" / "{{ phase }}"
+    log_path = results_dir / "converge.log"
+
+    if log_path.exists():
+        return log_path.read_text()
+
+    # Fallback: try current working directory structure
+    alt_path = Path("results") / "{{ phase }}" / "converge.log"
+    if alt_path.exists():
+        return alt_path.read_text()
+
+    return ""
+
+
+{% for test in tests %}
+@pytest.mark.{{ phase }}
+@pytest.mark.weight({{ test.weight }})
+def test_output_{{ test.safe_name }}():
+    """{{ 'Verify' if test.expected else 'Verify absence of' }}: {{ test.description }}"""
+    log_content = _get_converge_log()
+
+    if not log_content:
+        pytest.skip("Converge log not found - run grading first")
+
+{% if test.match_type == 'regex' %}
+    pattern = r"{{ test.pattern }}"
+    match = re.search(pattern, log_content)
+{% else %}
+    match = "{{ test.pattern }}" in log_content
+{% endif %}
+
+{% if test.expected %}
+    assert match, \
+        f"Expected Ansible output to contain '{{ test.pattern }}'"
+{% else %}
+    assert not match, \
+        f"Expected Ansible output to NOT contain '{{ test.pattern }}'"
+{% endif %}
+
+
+{% endfor %}

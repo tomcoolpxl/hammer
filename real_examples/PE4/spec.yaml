@@ -1,0 +1,163 @@
+assignment_id: "pe4-ansible-exam"
+assignment_version: "2025.01"
+spec_version: "1.0"
+seed: 42
+provider: "libvirt"
+os: "almalinux9"
+
+features:
+  handlers: false
+  reachability: false
+  vault: false
+  selinux: false
+
+topology:
+  domain: "pxldemo.local"
+  nodes:
+    - name: "server0"
+      groups: ["servers", "webservers", "dbservers"]
+      resources:
+        cpu: 1
+        ram_mb: 1024
+      forwarded_ports:
+        - host_port: 8888
+          guest_port: 80
+          protocol: tcp
+
+entrypoints:
+  playbook_path: "playbook.yml"
+  required_roles: ["pxl_exam_role"]
+  required_files: ["playbook.yml"]
+
+# No variable contracts - pure behavioral testing
+# variable_contracts: omitted (None)
+
+behavioral_contracts:
+  # ========================================
+  # Question 1: Users and Groups
+  # ========================================
+  groups:
+    - name: "students"
+      exists: true
+      node_selector: { host: "server0" }
+      weight: 1.0
+
+  users:
+    - name: "carol"
+      exists: true
+      groups: ["students"]
+      node_selector: { host: "server0" }
+      weight: 1.0
+    - name: "dave"
+      exists: true
+      groups: ["students"]
+      node_selector: { host: "server0" }
+      weight: 1.0
+    - name: "edgar"
+      exists: true
+      groups: ["students"]
+      node_selector: { host: "server0" }
+      weight: 1.0
+
+  # ========================================
+  # Question 2: MOTD File
+  # ========================================
+  files:
+    - items:
+        - path: "/etc/motd"
+          present: true
+          owner: "edgar"
+          group: "students"
+          mode: "0664"
+          content_regex: "Welcome to Paradise"
+      node_selector: { host: "server0" }
+      weight: 2.0
+
+    # ========================================
+    # Question 3: Healthcheck Script & Service
+    # ========================================
+    - items:
+        - path: "/opt/healthcheck.sh"
+          present: true
+          mode: "0755"
+      node_selector: { host: "server0" }
+      weight: 1.0
+
+    - items:
+        - path: "/etc/systemd/system/myhealthcheck.service"
+          present: true
+      node_selector: { host: "server0" }
+      weight: 1.0
+
+    - items:
+        - path: "/var/log/healthcheck.log"
+          present: true
+      node_selector: { host: "server0" }
+      phases: [mutation, idempotence]  # Only after reboot (service ran)
+      weight: 1.0
+
+    # ========================================
+    # Question 4: Conditional Run Files
+    # ========================================
+    # After first run: first_run.txt exists, second_run.txt does NOT
+    - items:
+        - path: "/opt/first_run.txt"
+          present: true
+          content_regex: "First run file"
+      node_selector: { host: "server0" }
+      weight: 1.0
+
+    - items:
+        - path: "/opt/second_run.txt"
+          present: false
+      node_selector: { host: "server0" }
+      phases: [baseline]  # Only check absence in baseline
+      weight: 1.0
+
+    # After second run: second_run.txt exists
+    - items:
+        - path: "/opt/second_run.txt"
+          present: true
+          content_regex: "Second run file"
+      node_selector: { host: "server0" }
+      phases: [mutation, idempotence]  # Check presence after 2nd run
+      weight: 1.0
+
+    # ========================================
+    # Question 5: File Should NOT Exist
+    # ========================================
+    - items:
+        - path: "/mnt/special/pxl/my_special_pxl_file"
+          present: false
+      node_selector: { host: "server0" }
+      weight: 1.0
+
+  services:
+    # Question 3: Service enabled AND running after reboot
+    - name: "myhealthcheck"
+      enabled: true
+      running: true  # Verified AFTER reboot = proves boot behavior
+      node_selector: { host: "server0" }
+      phases: [mutation, idempotence]  # Only check after reboot
+      weight: 2.0
+
+idempotence:
+  required: true
+  enforcement:
+    require_changed_zero: true
+    require_no_handlers: false
+
+phase_overlays:
+  baseline:
+    group_vars: {}
+    # No reboot - first run tests
+
+  mutation:
+    group_vars: {}
+    reboot:
+      enabled: true
+      nodes: [server0]
+      timeout: 120
+      poll_interval: 5
+    # Reboot after converge, before tests
+    # This verifies: myhealthcheck starts on boot

@@ -1,0 +1,45 @@
+"""HAMMER Generated External HTTP Tests (Host-based).
+
+Assignment: {{ assignment_id }}
+Phase: {{ phase }}
+
+Tests that verify HTTP endpoints are accessible from the grading host.
+These tests run directly on the host machine (not inside VMs).
+"""
+
+import pytest
+import re
+import requests
+
+
+{% for test in tests %}
+@pytest.mark.{{ phase }}
+@pytest.mark.weight({{ test.weight }})
+def test_external_http_{{ test.safe_name }}_from_host():
+    """Verify HTTP {{ test.method }} {{ test.url }} returns {{ test.expected_status }} from host."""
+    try:
+        response = requests.request(
+            method="{{ test.method }}",
+            url="{{ test.url }}",
+            timeout={{ test.timeout_seconds }},
+            allow_redirects=True,
+        )
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"HTTP request failed: {e}")
+
+    assert response.status_code == {{ test.expected_status }}, \
+        f"Expected status {{ test.expected_status }}, got {response.status_code} for {{ test.url }}"
+{% if test.response_contains is not none %}
+
+    assert "{{ test.response_contains }}" in response.text, \
+        f"Response body should contain '{{ test.response_contains }}'"
+{% endif %}
+{% if test.response_regex is not none %}
+
+    pattern = r"{{ test.response_regex }}"
+    assert re.search(pattern, response.text), \
+        f"Response body should match pattern '{pattern}'"
+{% endif %}
+
+
+{% endfor %}
