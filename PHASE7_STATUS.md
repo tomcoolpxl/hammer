@@ -47,22 +47,26 @@ Removed because GitHub Actions doesn't support KVM/libvirt required for Vagrant.
 
 ### Part 3: E2E Tests ✅ COMPLETED
 
-Full grading pipeline with actual VMs using PE1.
+Full grading pipeline with actual VMs using PE1, PE3, and PE4.
 
-**Files created:**
+**Files created/updated:**
 
 | File | Purpose |
 |------|---------|
 | `tests/e2e/__init__.py` | Package marker |
-| `tests/e2e/conftest.py` | Fixtures for VM setup/teardown |
+| `tests/e2e/conftest.py` | Fixtures for VM setup/teardown (PE1, PE3, PE4) |
 | `tests/e2e/test_pe1_grading.py` | Full grading tests with PE1 solution |
+| `tests/e2e/test_pe3_grading.py` | Full grading tests with PE3 solution |
+| `tests/e2e/test_pe4_grading.py` | Full grading tests with PE4 solution |
 | `tests/e2e/README.md` | Instructions for running E2E tests |
+| `real_examples/PE3/playbook_solution.yml` | Solution playbook for PE3 |
+| `real_examples/PE3/templates/mypage.conf.j2` | Nginx config template |
+| `real_examples/PE4/roles/pxl_exam_role/` | Solution role for PE4 |
 
 **Test scenarios implemented:**
-- PE1 solution passes baseline phase
-- PE1 solution passes mutation phase (variable change)
-- PE1 solution is idempotent
-- Empty playbook correctly fails tests
+- PE1/PE3/PE4 solutions pass with >= 80% score
+- Empty playbook/role correctly fails tests (< 50%)
+- Progress output visible with `-s` flag
 - Grading produces valid report.json
 
 ---
@@ -105,7 +109,8 @@ User-facing documentation for spec authoring and CLI usage.
 
 All components of Phase 7 are now complete:
 - [x] Integration tests passing (86 tests)
-- [x] E2E test infrastructure created and tested with PE1 solution
+- [x] Unit tests passing (123 tests)
+- [x] E2E test infrastructure created with PE1, PE3, PE4 solutions (5 tests)
 - [x] Comprehensive User Guide created in `docs/user-guide/`
 - [x] `pyproject.toml` updated with markers and dev dependencies
 
@@ -120,8 +125,13 @@ All components of Phase 7 are now complete:
 # Integration tests
 .venv/bin/python -m pytest tests/integration/ -v
 
-# E2E (requires Vagrant + libvirt)
-.venv/bin/python -m pytest tests/e2e/ -v -m e2e
+# E2E (requires Vagrant + libvirt) - use -s for live progress output
+.venv/bin/python -m pytest tests/e2e/ -v -s -m e2e
+
+# Run specific PE E2E tests
+.venv/bin/python -m pytest tests/e2e/test_pe1_grading.py -v -s
+.venv/bin/python -m pytest tests/e2e/test_pe3_grading.py -v -s
+.venv/bin/python -m pytest tests/e2e/test_pe4_grading.py -v -s
 
 # Linting
 .venv/bin/python -m ruff check src/ tests/

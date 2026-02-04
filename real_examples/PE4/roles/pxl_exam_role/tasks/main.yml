@@ -1,0 +1,75 @@
+---
+# Question 1: Users and Groups
+
+- name: Create students group
+  ansible.builtin.group:
+    name: students
+    state: present
+
+- name: Create users carol, dave, and edgar
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: students
+    append: true
+  loop:
+    - carol
+    - dave
+    - edgar
+
+# Question 2: MOTD File
+
+- name: Deploy /etc/motd file
+  ansible.builtin.copy:
+    src: motd
+    dest: /etc/motd
+    owner: edgar
+    group: students
+    mode: '0664'
+
+# Question 3: Healthcheck Script & Service
+
+- name: Deploy healthcheck script
+  ansible.builtin.copy:
+    src: healthcheck.sh
+    dest: /opt/healthcheck.sh
+    mode: '0755'
+
+- name: Deploy myhealthcheck systemd service
+  ansible.builtin.template:
+    src: myhealthcheck.service.j2
+    dest: /etc/systemd/system/myhealthcheck.service
+    mode: '0644'
+
+- name: Enable myhealthcheck service
+  ansible.builtin.systemd:
+    name: myhealthcheck
+    enabled: true
+    daemon_reload: true
+
+# Question 4: Conditional Run Files
+
+- name: Check if first_run.txt exists
+  ansible.builtin.stat:
+    path: /opt/first_run.txt
+  register: first_run_check
+
+- name: Deploy first_run.txt (only if it doesn't exist)
+  ansible.builtin.copy:
+    src: first_run.txt
+    dest: /opt/first_run.txt
+    mode: '0644'
+  when: not first_run_check.stat.exists
+
+- name: Deploy second_run.txt (only if first_run.txt exists)
+  ansible.builtin.copy:
+    src: second_run.txt
+    dest: /opt/second_run.txt
+    mode: '0644'
+  when: first_run_check.stat.exists
+
+# Question 5: File Should NOT Exist
+
+- name: Ensure special file is absent
+  ansible.builtin.file:
+    path: /mnt/special/pxl/my_special_pxl_file
+    state: absent

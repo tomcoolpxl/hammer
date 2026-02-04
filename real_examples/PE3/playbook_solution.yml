@@ -1,0 +1,66 @@
+---
+- name: Configure Nginx Webserver
+  hosts: webservers
+  become: true
+
+  handlers:
+    - name: restart nginx
+      ansible.builtin.service:
+        name: nginx
+        state: restarted
+
+    - name: restart firewalld
+      ansible.builtin.service:
+        name: firewalld
+        state: restarted
+
+  tasks:
+    - name: Install nginx package
+      ansible.builtin.dnf:
+        name: nginx
+        state: present
+
+    - name: Install firewalld package
+      ansible.builtin.dnf:
+        name: firewalld
+        state: present
+
+    - name: Start and enable firewalld service
+      ansible.builtin.service:
+        name: firewalld
+        state: started
+        enabled: true
+
+    - name: Create document root directory
+      ansible.builtin.file:
+        path: "{{ doc_root }}"
+        state: directory
+        mode: '0755'
+
+    - name: Deploy index.html from template
+      ansible.builtin.template:
+        src: templates/landing-page.html.j2
+        dest: "{{ doc_root }}/index.html"
+        mode: '0644'
+
+    - name: Deploy nginx configuration
+      ansible.builtin.template:
+        src: templates/mypage.conf.j2
+        dest: /etc/nginx/conf.d/mypage.conf
+        mode: '0644'
+      notify: restart nginx
+
+    - name: Open firewall port for web traffic
+      ansible.posix.firewalld:
+        port: "{{ web_port }}/tcp"
+        zone: public
+        permanent: true
+        immediate: true
+        state: enabled
+      notify: restart firewalld
+
+    - name: Start and enable nginx service
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true

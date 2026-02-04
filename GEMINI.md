@@ -15,6 +15,8 @@ The project documentation is organized into the `docs/` directory:
 *   **`docs/design/01_spec_models.md`**: (Formerly `PYDANTIC_MODEL_SET.md`) Provides the **Pydantic v2** data models.
 *   **`docs/design/02_normalization_logic.md`**: (Formerly `NORMALIZATION_MODEL_AND EXEC_PLAN_BUILDER.md`) Defines the "Phase Normalization" layer and Execution Plan.
 *   **`docs/planning/IMPLEMENTATION_ROADMAP.md`**: The detailed, phased implementation plan.
+*   **`docs/user-guide/`**: User documentation for spec authoring and CLI usage.
+*   **`docs/E2E_TEST_ANALYSIS.md`**: E2E test analysis and implementation status.
 
 ## Architecture
 
@@ -53,6 +55,23 @@ The system follows a pipeline architecture:
     *   Generated pytest/testinfra tests for all phases
 *   `hammer grade` - Full grading pipeline with converge/verify/report
 *   Full integration test verified: `vagrant up`, `ansible all -m ping`, `vagrant destroy`
+
+### Test Infrastructure
+
+| Test Type | Count | Description |
+|-----------|-------|-------------|
+| Unit tests | 123 | Core functionality |
+| Integration tests | 86 | Build artifacts without VMs |
+| E2E tests | 5 | Full grading with Vagrant VMs |
+
+### Example Assignments
+
+| Assignment | Spec | Solution | E2E Test |
+|------------|------|----------|----------|
+| PE1 | ✅ | ✅ `playbook_solution.yaml` | ✅ |
+| PE2 | ✅ | ❌ | ❌ |
+| PE3 | ✅ | ✅ `playbook_solution.yml` | ✅ |
+| PE4 | ✅ | ✅ `roles/pxl_exam_role/` | ✅ |
 
 ## Feature Summary
 
@@ -200,7 +219,22 @@ idempotence:
 
 Please refer to **`docs/planning/IMPLEMENTATION_ROADMAP.md`** for the detailed step-by-step plan.
 
-Current focus areas:
-- End-to-end testing with real assignments
-- Documentation and examples
-- CI/CD integration
+### Completed
+- ✅ End-to-end testing with PE1, PE3, PE4 assignments
+- ✅ User documentation in `docs/user-guide/`
+- ✅ Solution playbooks/roles for E2E testing
+
+### Remaining
+- PE2 solution and E2E tests
+- CI/CD integration (blocked: GitHub Actions lacks KVM support)
+- Additional example assignments
+
+## Running Tests
+
+```bash
+# Unit + Integration tests
+.venv/bin/python -m pytest tests/unit/ tests/integration/ -v
+
+# E2E tests (requires Vagrant + libvirt) - use -s for live output
+.venv/bin/python -m pytest tests/e2e/ -v -s -m e2e
+```

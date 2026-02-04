@@ -499,11 +499,16 @@ hammer/
 │       └── results.py   # Result models
 ├── tests/
 │   ├── unit/            # Unit tests
+│   ├── integration/     # Integration tests (no VMs)
+│   ├── e2e/             # End-to-end tests (with VMs)
 │   └── fixtures/        # Test specs and playbooks
 ├── real_examples/       # Real assignment examples
-│   ├── PE3/
-│   └── PE4/
+│   ├── PE1/             # Pyramid app (with solution)
+│   ├── PE2/             # Multi-node deployment
+│   ├── PE3/             # Nginx webserver (with solution)
+│   └── PE4/             # Role-based exam (with solution)
 └── docs/
+    ├── user-guide/      # User documentation
     └── planning/        # Design documents
 ```
 
@@ -517,6 +522,13 @@ source .venv/bin/activate
 
 # Run unit tests
 pytest tests/unit/ -v
+
+# Run integration tests
+pytest tests/integration/ -v
+
+# Run E2E tests (requires Vagrant + libvirt)
+# Use -s flag for real-time progress output
+pytest tests/e2e/ -v -s -m e2e
 
 # Run with coverage
 pytest tests/unit/ --cov=hammer --cov-report=term-missing
@@ -551,8 +563,12 @@ Each phase:
 
 See the `real_examples/` directory for complete working examples:
 
-- **PE3**: Multi-node nginx webserver with variable contracts
-- **PE4**: Single-node exam with users, services, conditional files, and reboot testing
+- **PE1**: Python Pyramid web application with variable contracts and port mutation
+- **PE2**: Multi-node deployment with database and web tiers
+- **PE3**: Nginx webserver with variable contracts (solution: `playbook_solution.yml`)
+- **PE4**: Role-based exam with users, services, conditional files, and reboot testing (solution: `roles/pxl_exam_role/`)
+
+PE1, PE3, and PE4 include solution playbooks/roles for E2E testing.
 
 ## License
 
