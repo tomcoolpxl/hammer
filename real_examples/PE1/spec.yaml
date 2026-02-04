@@ -149,7 +149,7 @@ behavioral_contracts:
   # Extra 1: iptables firewall
   firewall:
     - open_ports:
-        - port: 6000
+        - port: { var: "app_port" }
           protocol: "tcp"
           zone: "public"  # Not used for iptables but required by schema
       firewall_type: "iptables"
@@ -165,7 +165,7 @@ behavioral_contracts:
 
   # HTTP endpoint test - verifies app is accessible
   http_endpoints:
-    - url: "http://localhost:6000/hostname"
+    - url: "http://localhost:{{ app_port }}/hostname"
       method: "GET"
       expected_status: 200
       response_contains: "Hostname:"

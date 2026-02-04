@@ -76,8 +76,7 @@ def pe1_vms(pe1_build):
     # Bring up VMs
     # Use -f to avoid interaction, although vagrant up is usually non-interactive
     try:
-        print(f"
-Bringing up VMs in {grading_dir}...")
+        print(f"\nBringing up VMs in {grading_dir}...")
         subprocess.run(
             ["vagrant", "up"], 
             cwd=str(grading_dir), 
@@ -92,6 +91,5 @@ Bringing up VMs in {grading_dir}...")
         subprocess.run(["vagrant", "destroy", "-f"], cwd=str(grading_dir), capture_output=True)
         pytest.fail(f"Vagrant up failed: {e.stderr.decode()}")
     finally:
-        print(f"
-Destroying VMs in {grading_dir}...")
+        print(f"\nDestroying VMs in {grading_dir}...")
         subprocess.run(["vagrant", "destroy", "-f"], cwd=str(grading_dir), capture_output=True)

@@ -201,45 +201,63 @@ def generate_firewall_tests(
     return tests
 
 
-def generate_http_endpoint_tests(contract: PhaseContractPlan) -> List[Dict[str, Any]]:
+def _interpolate_vars(s: str, resolved_vars: Dict[str, Any]) -> str:
+    """Interpolate {{ var }} placeholders in a string."""
+    if not s:
+        return s
+    
+    result = s
+    for name, val in resolved_vars.items():
+        placeholder = "{{" + f" {name} " + "}}"
+        placeholder_no_space = "{{" + name + "}}"
+        result = result.replace(placeholder, str(val))
+        result = result.replace(placeholder_no_space, str(val))
+    
+    return result
+
+
+def generate_http_endpoint_tests(
+    contract: PhaseContractPlan,
+    resolved_vars: Dict[str, Any],
+) -> List[Dict[str, Any]]:
     """Generate test data for HTTP endpoint checks."""
     tests = []
 
     for http in contract.http_endpoints:
+        url = _interpolate_vars(http.url, resolved_vars)
         tests.append({
-            "url": http.url,
+            "url": url,
             "method": http.method,
             "expected_status": http.expected_status,
             "response_contains": http.response_contains,
             "response_regex": http.response_regex,
             "timeout_seconds": http.timeout_seconds,
             "hosts": http.host_targets,
-            "safe_name": _make_safe_name(http.url),
+            "safe_name": _make_safe_name(url),
             "weight": http.weight,
         })
 
     return tests
 
 
-def generate_external_http_tests(contract: PhaseContractPlan) -> Dict[str, List[Dict[str, Any]]]:
-    """Generate test data for external HTTP checks.
-
-    Returns a dict with two keys:
-    - 'host_tests': Tests to run from the grading host
-    - 'vm_tests': Tests to run from VMs (with from_node)
-    """
+def generate_external_http_tests(
+    contract: PhaseContractPlan,
+    resolved_vars: Dict[str, Any],
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Generate test data for external HTTP checks."""
     host_tests = []
     vm_tests = []
 
     for ext in contract.external_http:
+        url = _interpolate_vars(ext.url, resolved_vars)
         test_data = {
-            "url": ext.url,
+            "url": url,
             "method": ext.method,
             "expected_status": ext.expected_status,
             "response_contains": ext.response_contains,
             "response_regex": ext.response_regex,
             "timeout_seconds": ext.timeout_seconds,
-            "safe_name": _make_safe_name(ext.url),
+            "safe_name": _make_safe_name(url),
             "weight": ext.weight,
         }
 

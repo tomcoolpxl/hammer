@@ -25,7 +25,6 @@
   become: true
   vars:
     app_user: app_user
-    app_port: 6000
 
   tasks:
     # ===================
@@ -112,13 +111,16 @@
         src: templates/app.service.j2
         dest: /etc/systemd/system/app.service
         mode: '0644'
-
-    - name: Reload systemd config
-      ansible.builtin.systemd:
-        daemon_reload: true
+      register: app_service_config
 
     - name: Enable and start app service
       ansible.builtin.systemd:
         name: app
-        state: started
+        state: "{% if app_service_config.changed %}restarted{% else %}started{% endif %}"
         enabled: true
+        daemon_reload: true
+
+    - name: Wait for app to start
+      ansible.builtin.wait_for:
+        port: "{{ app_port }}"
+        timeout: 30

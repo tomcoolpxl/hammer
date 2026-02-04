@@ -18,7 +18,7 @@ def test_http_{{ test.safe_name }}_on_{{ host }}(host_{{ host }}):
     """Verify HTTP {{ test.method }} {{ test.url }} returns {{ test.expected_status }} on {{ host }}."""
     # Use curl to test HTTP endpoint
     cmd = host_{{ host }}.run(
-        "curl -s -o /tmp/hammer_http_response -w '%%{http_code}' "
+        "curl -s -o /tmp/hammer_http_response -w '%{http_code}' "
         "-X {{ test.method }} "
         "--connect-timeout {{ test.timeout_seconds }} "
         "'{{ test.url }}'"

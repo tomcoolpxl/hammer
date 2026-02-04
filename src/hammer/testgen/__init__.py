@@ -239,7 +239,7 @@ def _generate_phase_tests(
         generated_files.append(path)
 
     # HTTP endpoint tests
-    http_endpoint_tests = generate_http_endpoint_tests(contract)
+    http_endpoint_tests = generate_http_endpoint_tests(contract, resolved_vars)
     if http_endpoint_tests:
         content = env.get_template("test_http.py.j2").render(
             assignment_id=spec.assignment_id,
@@ -251,7 +251,7 @@ def _generate_phase_tests(
         generated_files.append(path)
 
     # External HTTP tests (host-based and VM-based)
-    external_http_tests = generate_external_http_tests(contract)
+    external_http_tests = generate_external_http_tests(contract, resolved_vars)
 
     # Host-based external HTTP tests
     if external_http_tests["host_tests"]:

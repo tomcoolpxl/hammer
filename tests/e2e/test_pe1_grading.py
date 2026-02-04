@@ -23,9 +23,7 @@ class TestPE1Grading:
         # ---------------------------------------------------------
         empty_repo = pe1_build.parent / "empty_repo"
         empty_repo.mkdir(exist_ok=True)
-        (empty_repo / "playbook.yml").write_text("- hosts: all
-  tasks: []
-")
+        (empty_repo / "playbook.yaml").write_text("- hosts: all\n  tasks: []\n")
         
         results_empty = pe1_build.parent / "results_empty"
         
@@ -45,8 +43,7 @@ class TestPE1Grading:
             "--skip-build"
         ]
         
-        print("
-Running grading with empty playbook (expecting failure)...")
+        print("\nRunning grading with empty playbook (expecting failure)...")
         # Should exit with non-zero because some tests will fail
         result_empty = subprocess.run(cmd_empty, capture_output=True, text=True)
         
@@ -66,8 +63,8 @@ Running grading with empty playbook (expecting failure)...")
         solution_repo = pe1_build.parent / "solution_repo"
         solution_repo.mkdir(exist_ok=True)
         
-        # Copy solution as playbook.yml
-        shutil.copy2(solution_playbook, solution_repo / "playbook.yml")
+        # Copy solution as playbook.yaml
+        shutil.copy2(solution_playbook, solution_repo / "playbook.yaml")
         
         # Copy other required files (files/, templates/)
         if (pe1_dir / "files").exists():
@@ -100,6 +97,18 @@ Running grading with empty playbook (expecting failure)...")
             print(f"STDOUT: {result_solution.stdout}")
             print(f"STDERR: {result_solution.stderr}")
             
+            # Print failed test details
+            report_solution_path = results_solution / "results" / "report.json"
+            if report_solution_path.exists():
+                with open(report_solution_path) as f:
+                    report = json.load(f)
+                for phase_name, phase in report["phases"].items():
+                    failed_tests = [d for d in phase["tests"]["details"] if d["outcome"] == "failed"]
+                    if failed_tests:
+                        print(f"\nFailed tests in {phase_name}:")
+                        for t in failed_tests:
+                            print(f"  - {t['name']}: {t['message']}")
+
         assert result_solution.returncode == 0
         
         # Check report.json for scenario 2

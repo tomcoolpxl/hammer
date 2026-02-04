@@ -1,3 +1,4 @@
+import os
 import psutil
 import platform
 import distro
@@ -14,9 +15,11 @@ def get_aws_id(request):
     distro_name = distro_info[0] if distro_info else 'Unknown'
     distro_version = distro_info[1] if distro_info else 'Unknown'
     return Response(f"PXL PE - Hostname: {hostname}\nArchitecture: {architecture}\nRAM: {ram:.2f} GB\nDistribution: {distro_name} {distro_version}")
+
 config = Configurator()
 config.add_route('hostname', '/hostname')
 config.add_view(get_aws_id, route_name='hostname')
 
 app = config.make_wsgi_app()
-serve(app, host='0.0.0.0', port=6000)
+port = int(os.environ.get('APP_PORT', 6000))
+serve(app, host='0.0.0.0', port=port)

@@ -16,8 +16,14 @@ from hammer.runner.results import ConvergeResult
 
 def find_ansible_playbook() -> str:
     """Find the ansible-playbook executable."""
+    import sys
+    
+    # Check current python's bin dir (useful when running in a venv)
+    venv_bin = Path(sys.executable).parent / "ansible-playbook"
+    
     # Check common locations
     locations = [
+        str(venv_bin) if venv_bin.exists() else None,
         shutil.which("ansible-playbook"),
         os.path.expanduser("~/.local/bin/ansible-playbook"),
         "/usr/bin/ansible-playbook",
@@ -59,7 +65,10 @@ def run_playbook(
     Returns:
         Tuple of (ConvergeResult, stdout_log)
     """
-    ansible_playbook = find_ansible_playbook()
+    try:
+        ansible_playbook = find_ansible_playbook()
+    except FileNotFoundError as e:
+        return ConvergeResult(success=False, error_message=str(e)), str(e)
 
     # Build command
     cmd = [

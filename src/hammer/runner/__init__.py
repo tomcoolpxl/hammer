@@ -125,9 +125,10 @@ def grade_assignment(
     report.max_score = total_max
     report.percentage = percentage
 
-    # Check for any failures
+    # Check for any failures (converge must succeed AND all tests must pass)
     report.success = all(
-        p.converge.success for p in report.phases.values()
+        p.converge.success and p.tests.failed == 0 and p.tests.errors == 0
+        for p in report.phases.values()
     )
 
     # Write report
@@ -309,6 +310,9 @@ def _run_phase(
         quiet=not verbose,
     )
 
+    if verbose:
+        print(converge_log)
+
     # Save converge log
     (results_dir / "converge.log").write_text(converge_log)
     (results_dir / "converge_result.json").write_text(
@@ -321,6 +325,8 @@ def _run_phase(
     if verbose:
         print(f"[{phase}] Converge: ok={converge_result.ok}, "
               f"changed={converge_result.changed}, failed={converge_result.failed}")
+        if not converge_result.success and converge_result.error_message:
+            print(f"[{phase}] Converge Error: {converge_result.error_message}")
 
     # Check for failure policy and reboot configuration
     overlay_phase_name = "mutation" if phase == "idempotence" else phase
