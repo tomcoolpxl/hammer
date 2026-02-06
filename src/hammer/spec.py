@@ -3,11 +3,21 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, Field, model_validator
 
+from hammer.validators import (
+    SafeIdentifier,
+    SafeDomain,
+    SafePath,
+    SafeRelativePath,
+    SafePattern,
+    SafeUrl,
+    SafeZone,
+)
+
 # -------------------------
 # Common primitives
 # -------------------------
 
-NonEmptyStr = str
+NonEmptyStr = str  # Kept for fields where strict validation is not needed
 
 PhaseName = Literal["baseline", "mutation"]
 
@@ -64,20 +74,20 @@ class ForwardedPort(BaseModel):
 
 
 class Node(BaseModel):
-    name: NonEmptyStr
-    groups: List[NonEmptyStr]
+    name: SafeIdentifier
+    groups: List[SafeIdentifier]
     resources: NodeResources
     forwarded_ports: Optional[List[ForwardedPort]] = None
 
 
 class Dependency(BaseModel):
-    from_host: NonEmptyStr
-    to_host: NonEmptyStr
+    from_host: SafeIdentifier
+    to_host: SafeIdentifier
     kind: Literal["reachability", "ordering"]
 
 
 class Topology(BaseModel):
-    domain: Optional[NonEmptyStr] = None  # Optional domain suffix for FQDNs
+    domain: Optional[SafeDomain] = None  # Optional domain suffix for FQDNs
     nodes: List[Node]
     forwarded_ports: Optional[List[ForwardedPort]] = None  # Topology-wide ports (legacy)
     dependencies: Optional[List[Dependency]] = None
@@ -96,14 +106,14 @@ class Topology(BaseModel):
 
 class ProvidedFile(BaseModel):
     """A file provided by the assignment to students."""
-    source: NonEmptyStr  # Path relative to spec file
-    destination: NonEmptyStr  # Path in student bundle
+    source: SafeRelativePath  # Path relative to spec file
+    destination: SafeRelativePath  # Path in student bundle
 
 
 class Entrypoints(BaseModel):
-    playbook_path: NonEmptyStr
-    required_roles: Optional[List[NonEmptyStr]] = None
-    required_files: Optional[List[NonEmptyStr]] = None
+    playbook_path: SafeRelativePath
+    required_roles: Optional[List[SafeIdentifier]] = None
+    required_files: Optional[List[SafeRelativePath]] = None
     provided_files: Optional[List[ProvidedFile]] = None  # Files given to students
 
 
@@ -112,34 +122,34 @@ class Entrypoints(BaseModel):
 # -------------------------
 
 class ServiceListenTarget(BaseModel):
-    service: NonEmptyStr
+    service: SafeIdentifier
     protocol: Protocol
     address: NonEmptyStr
 
 
 class FirewallPortTarget(BaseModel):
-    zone: NonEmptyStr
+    zone: SafeZone
     protocol: Protocol
 
 
 class FilePatternTarget(BaseModel):
-    path: NonEmptyStr
-    pattern: NonEmptyStr
+    path: SafePath
+    pattern: SafePattern
 
 
 class FilePathTarget(BaseModel):
-    path: NonEmptyStr
+    path: SafePath
 
 
 class FileModeTarget(BaseModel):
-    path: NonEmptyStr
+    path: SafePath
     mode: NonEmptyStr
 
 
 class FileOwnerTarget(BaseModel):
-    path: NonEmptyStr
-    owner: NonEmptyStr
-    group: NonEmptyStr
+    path: SafePath
+    owner: SafeIdentifier
+    group: SafeIdentifier
 
 
 BindingTarget = Union[
@@ -168,7 +178,7 @@ class Binding(BaseModel):
 
 class OverlayTarget(BaseModel):
     overlay_kind: OverlayKind
-    target_name: NonEmptyStr
+    target_name: SafeIdentifier
 
 
 class VariableDefaults(BaseModel):
@@ -176,7 +186,7 @@ class VariableDefaults(BaseModel):
 
 
 class VariableContract(BaseModel):
-    name: NonEmptyStr
+    name: SafeIdentifier
     type: VarType
     defaults: VariableDefaults
     allowed_values: List[Any]
@@ -204,8 +214,8 @@ class VariableContract(BaseModel):
 # -------------------------
 
 class PrecedenceScenario(BaseModel):
-    name: NonEmptyStr
-    variable: NonEmptyStr
+    name: SafeIdentifier
+    variable: SafeIdentifier
     layers: List[PrecedenceLayer]
     expected_winner: PrecedenceLayer
     bindings_to_verify: List[int]
@@ -229,8 +239,8 @@ class PrecedenceScenario(BaseModel):
 # -------------------------
 
 class NodeSelector(BaseModel):
-    group: Optional[NonEmptyStr] = None
-    host: Optional[NonEmptyStr] = None
+    group: Optional[SafeIdentifier] = None
+    host: Optional[SafeIdentifier] = None
 
     @model_validator(mode="after")
     def exactly_one_selector(self) -> "NodeSelector":
@@ -245,7 +255,7 @@ class NodeSelector(BaseModel):
 # -------------------------
 
 class PackageContract(BaseModel):
-    name: NonEmptyStr
+    name: SafeIdentifier
     state: Literal["present", "absent"]
     node_selector: NodeSelector
     phases: Optional[List[ExecutionPhaseName]] = None  # None = all phases
@@ -254,16 +264,16 @@ class PackageContract(BaseModel):
 
 class PipPackageContract(BaseModel):
     """Contract for verifying pip packages are installed."""
-    name: NonEmptyStr
+    name: NonEmptyStr  # pip names can have dots, etc.
     state: Literal["present", "absent"] = "present"
-    python: Optional[NonEmptyStr] = None  # Python executable, defaults to system python3
+    python: Optional[SafePath] = None  # Python executable, defaults to system python3
     node_selector: NodeSelector
     phases: Optional[List[ExecutionPhaseName]] = None  # None = all phases
     weight: float = Field(default=1.0, ge=0.0)
 
 
 class ServiceContract(BaseModel):
-    name: NonEmptyStr
+    name: SafeIdentifier
     enabled: bool
     running: bool
     node_selector: NodeSelector
@@ -273,13 +283,13 @@ class ServiceContract(BaseModel):
 
 class UserContract(BaseModel):
     """Contract for verifying system users exist with specified properties."""
-    name: NonEmptyStr
+    name: SafeIdentifier
     exists: bool = True
     uid: Optional[int] = None
     gid: Optional[int] = None
-    home: Optional[NonEmptyStr] = None
-    shell: Optional[NonEmptyStr] = None
-    groups: Optional[List[NonEmptyStr]] = None  # Supplementary groups
+    home: Optional[SafePath] = None
+    shell: Optional[SafePath] = None
+    groups: Optional[List[SafeIdentifier]] = None  # Supplementary groups
     node_selector: NodeSelector
     phases: Optional[List[ExecutionPhaseName]] = None  # None = all phases
     weight: float = Field(default=1.0, ge=0.0)
@@ -287,7 +297,7 @@ class UserContract(BaseModel):
 
 class GroupContract(BaseModel):
     """Contract for verifying system groups exist with specified properties."""
-    name: NonEmptyStr
+    name: SafeIdentifier
     exists: bool = True
     gid: Optional[int] = None
     node_selector: NodeSelector
@@ -296,7 +306,7 @@ class GroupContract(BaseModel):
 
 
 class PortRefVar(BaseModel):
-    var: NonEmptyStr
+    var: SafeIdentifier
 
 
 PortRef = Union[int, PortRefVar]
@@ -305,7 +315,7 @@ PortRef = Union[int, PortRefVar]
 class FirewallPort(BaseModel):
     port: PortRef
     protocol: Protocol
-    zone: NonEmptyStr
+    zone: SafeZone
 
 
 FirewallType = Literal["firewalld", "iptables"]
@@ -320,13 +330,13 @@ class FirewallContract(BaseModel):
 
 
 class FileContractItem(BaseModel):
-    path: NonEmptyStr
+    path: SafePath
     present: bool
     is_directory: bool = False  # True if path should be a directory
     mode: Optional[NonEmptyStr] = None
-    owner: Optional[NonEmptyStr] = None
-    group: Optional[NonEmptyStr] = None
-    content_regex: Optional[NonEmptyStr] = None  # Only for files, not directories
+    owner: Optional[SafeIdentifier] = None
+    group: Optional[SafeIdentifier] = None
+    content_regex: Optional[SafePattern] = None  # Only for files, not directories
 
 
 class FilesContract(BaseModel):
@@ -337,8 +347,8 @@ class FilesContract(BaseModel):
 
 
 class ReachabilityContract(BaseModel):
-    from_host: NonEmptyStr
-    to_host: NonEmptyStr
+    from_host: SafeIdentifier
+    to_host: SafeIdentifier
     protocol: Protocol
     port: PortRef
     expectation: ReachabilityExpectation
@@ -348,11 +358,11 @@ class ReachabilityContract(BaseModel):
 
 class HttpEndpointContract(BaseModel):
     """Contract for verifying HTTP endpoints return expected responses."""
-    url: NonEmptyStr  # URL to test, can include {{ variable }} references
+    url: NonEmptyStr  # URL to test, can include {{ variable }} references (validated after interpolation)
     method: Literal["GET", "POST", "PUT", "DELETE", "HEAD"] = "GET"
     expected_status: int = Field(default=200, ge=100, le=599)
-    response_contains: Optional[NonEmptyStr] = None  # Substring to find in response
-    response_regex: Optional[NonEmptyStr] = None  # Regex pattern to match
+    response_contains: Optional[SafePattern] = None  # Substring to find in response
+    response_regex: Optional[SafePattern] = None  # Regex pattern to match
     timeout_seconds: int = Field(default=5, ge=1, le=60)
     node_selector: NodeSelector  # Which node to run the test from
     phases: Optional[List[ExecutionPhaseName]] = None  # None = all phases
@@ -369,8 +379,8 @@ class ExternalHttpContract(BaseModel):
     url: NonEmptyStr  # URL to test (use localhost:port for host, or VM hostname for cross-VM)
     method: Literal["GET", "POST", "PUT", "DELETE", "HEAD"] = "GET"
     expected_status: int = Field(default=200, ge=100, le=599)
-    response_contains: Optional[NonEmptyStr] = None
-    response_regex: Optional[NonEmptyStr] = None
+    response_contains: Optional[SafePattern] = None
+    response_regex: Optional[SafePattern] = None
     timeout_seconds: int = Field(default=10, ge=1, le=60)
     from_host: bool = False  # If True, test from grading host machine
     from_node: Optional[NodeSelector] = None  # If from_host=False, test from this VM
@@ -392,7 +402,7 @@ class OutputContract(BaseModel):
     Use this to check debug messages, registered variable output, or other
     Ansible playbook output patterns.
     """
-    pattern: NonEmptyStr  # String or regex pattern to match
+    pattern: SafePattern  # String or regex pattern to match
     match_type: Literal["contains", "regex"] = "contains"
     expected: bool = True  # True = should match, False = should NOT match
     description: Optional[NonEmptyStr] = None  # Human-readable description
@@ -419,15 +429,15 @@ class BehavioralContracts(BaseModel):
 # -------------------------
 
 class TriggerFileChanged(BaseModel):
-    file_changed: NonEmptyStr
+    file_changed: SafePath
 
 
 class TriggerTemplateChanged(BaseModel):
-    template_changed: NonEmptyStr
+    template_changed: SafePath
 
 
 class TriggerVariableChanged(BaseModel):
-    variable_changed: NonEmptyStr
+    variable_changed: SafeIdentifier
 
 
 Trigger = Union[
@@ -442,7 +452,7 @@ class NonTriggerNoop(BaseModel):
 
 
 class NonTriggerUnrelatedFile(BaseModel):
-    unrelated_file_changed: NonEmptyStr
+    unrelated_file_changed: SafePath
 
 
 NonTrigger = Union[
@@ -452,7 +462,7 @@ NonTrigger = Union[
 
 
 class HandlerTarget(BaseModel):
-    service: NonEmptyStr
+    service: SafeIdentifier
     action: Literal["restart", "reload"]
 
 
@@ -463,7 +473,7 @@ class ExpectedRunsSet(BaseModel):
 
 
 class HandlerContract(BaseModel):
-    handler_name: NonEmptyStr
+    handler_name: NonEmptyStr  # Handler names can contain spaces (e.g., "restart nginx")
     node_selector: NodeSelector
     handler_target: HandlerTarget
     trigger_conditions: List[Trigger]
@@ -522,7 +532,7 @@ class FailurePolicy(BaseModel):
 class RebootConfig(BaseModel):
     """Configuration for rebooting nodes after converge, before tests."""
     enabled: bool = False
-    nodes: Optional[List[NonEmptyStr]] = None  # None = all nodes
+    nodes: Optional[List[SafeIdentifier]] = None  # None = all nodes
     timeout: int = Field(default=120, ge=30, le=600)
     poll_interval: int = Field(default=5, ge=1, le=30)
 
@@ -550,7 +560,7 @@ class PhaseOverlays(BaseModel):
 # -------------------------
 
 class HammerSpec(BaseModel):
-    assignment_id: NonEmptyStr
+    assignment_id: SafeIdentifier
     assignment_version: NonEmptyStr
     spec_version: Literal["1.0"]
     seed: int

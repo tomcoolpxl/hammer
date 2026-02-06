@@ -23,10 +23,10 @@ def test_firewall_port_{{ port.port }}_{{ port.protocol }}_on_{{ host }}(host_{{
         f"Port {{ port.port }}/{{ port.protocol }} should be allowed in iptables INPUT chain on {{ host }}"
 {% else %}
     # Check firewalld for port in zone
-    cmd = host_{{ host }}.run("sudo firewall-cmd --list-ports --zone={{ port.zone }}")
+    cmd = host_{{ host }}.run("sudo firewall-cmd --list-ports --zone={{ port.zone | pyescape }}")
     assert cmd.rc == 0, f"Failed to query firewall on {{ host }}"
     assert "{{ port.port }}/{{ port.protocol }}" in cmd.stdout, \
-        f"Port {{ port.port }}/{{ port.protocol }} should be open in zone {{ port.zone }} on {{ host }}"
+        f"Port {{ port.port }}/{{ port.protocol }} should be open in zone {{ port.zone | pyescape }} on {{ host }}"
 {% endif %}
 
 

@@ -16,31 +16,31 @@ import pytest
 @pytest.mark.weight({{ test.weight }})
 def test_file_{{ item.safe_name }}_on_{{ host }}(host_{{ host }}):
     """Verify file {{ item.path }} on {{ host }}."""
-    f = host_{{ host }}.file("{{ item.path }}")
+    f = host_{{ host }}.file("{{ item.path | pyescape }}")
 {% if item.present %}
-    assert f.exists, f"File {{ item.path }} should exist on {{ host }}"
+    assert f.exists, f"File {{ item.path | pyescape }} should exist on {{ host }}"
 {% if item.is_directory %}
-    assert f.is_directory, f"{{ item.path }} should be a directory on {{ host }}"
+    assert f.is_directory, f"{{ item.path | pyescape }} should be a directory on {{ host }}"
 {% endif %}
 {% if item.mode %}
     assert f.mode == {{ item.mode }}, \
-        f"File {{ item.path }} should have mode {{ item.mode }}, got {f.mode}"
+        f"File {{ item.path | pyescape }} should have mode {{ item.mode }}, got {f.mode}"
 {% endif %}
 {% if item.owner %}
-    assert f.user == "{{ item.owner }}", \
-        f"File {{ item.path }} should be owned by {{ item.owner }}, got {f.user}"
+    assert f.user == "{{ item.owner | pyescape }}", \
+        f"File {{ item.path | pyescape }} should be owned by {{ item.owner | pyescape }}, got {f.user}"
 {% endif %}
 {% if item.group %}
-    assert f.group == "{{ item.group }}", \
-        f"File {{ item.path }} should have group {{ item.group }}, got {f.group}"
+    assert f.group == "{{ item.group | pyescape }}", \
+        f"File {{ item.path | pyescape }} should have group {{ item.group | pyescape }}, got {f.group}"
 {% endif %}
 {% if item.content_regex and not item.is_directory %}
-    content_pattern = r"{{ item.content_regex }}"
+    content_pattern = r"{{ item.content_regex | pyescape }}"
     assert f.contains(content_pattern), \
-        f"File {{ item.path }} should contain pattern matching regex"
+        f"File {{ item.path | pyescape }} should contain pattern matching regex"
 {% endif %}
 {% else %}
-    assert not f.exists, f"File {{ item.path }} should not exist on {{ host }}"
+    assert not f.exists, f"File {{ item.path | pyescape }} should not exist on {{ host }}"
 {% endif %}
 
 

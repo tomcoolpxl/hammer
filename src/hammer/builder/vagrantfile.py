@@ -1,5 +1,6 @@
 """Vagrantfile generation for HAMMER assignments."""
 
+import shlex
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
@@ -32,6 +33,7 @@ def render_vagrantfile(
         loader=FileSystemLoader(TEMPLATES_DIR),
         keep_trailing_newline=True,
     )
+    env.filters["shellescape"] = shlex.quote
     template = env.get_template("Vagrantfile.j2")
 
     return template.render(

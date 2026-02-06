@@ -34,12 +34,28 @@ __all__ = ["generate_tests"]
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 
+def _pyescape(value: str) -> str:
+    """Escape a string for safe embedding in Python string literals."""
+    if not isinstance(value, str):
+        value = str(value)
+    return (
+        value
+        .replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("'", "\\'")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+    )
+
+
 def _get_env() -> Environment:
     """Get Jinja2 environment with templates."""
-    return Environment(
+    env = Environment(
         loader=FileSystemLoader(TEMPLATES_DIR),
         keep_trailing_newline=True,
     )
+    env.filters["pyescape"] = _pyescape
+    return env
 
 
 def _get_resolved_vars(plan: ExecutionPlan, phase: ExecutionPhaseName) -> Dict[str, Any]:

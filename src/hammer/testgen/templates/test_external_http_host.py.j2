@@ -20,7 +20,7 @@ def test_external_http_{{ test.safe_name }}_from_host():
     try:
         response = requests.request(
             method="{{ test.method }}",
-            url="{{ test.url }}",
+            url="{{ test.url | pyescape }}",
             timeout={{ test.timeout_seconds }},
             allow_redirects=True,
         )
@@ -28,15 +28,15 @@ def test_external_http_{{ test.safe_name }}_from_host():
         pytest.fail(f"HTTP request failed: {e}")
 
     assert response.status_code == {{ test.expected_status }}, \
-        f"Expected status {{ test.expected_status }}, got {response.status_code} for {{ test.url }}"
+        f"Expected status {{ test.expected_status }}, got {response.status_code} for {{ test.url | pyescape }}"
 {% if test.response_contains is not none %}
 
-    assert "{{ test.response_contains }}" in response.text, \
-        f"Response body should contain '{{ test.response_contains }}'"
+    assert "{{ test.response_contains | pyescape }}" in response.text, \
+        f"Response body should contain '{{ test.response_contains | pyescape }}'"
 {% endif %}
 {% if test.response_regex is not none %}
 
-    pattern = r"{{ test.response_regex }}"
+    pattern = r"{{ test.response_regex | pyescape }}"
     assert re.search(pattern, response.text), \
         f"Response body should match pattern '{pattern}'"
 {% endif %}

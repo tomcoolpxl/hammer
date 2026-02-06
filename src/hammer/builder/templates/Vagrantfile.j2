@@ -36,9 +36,9 @@ Vagrant.configure("2") do |config|
     {{ node.name }}.vm.provision "shell", inline: <<-SHELL
 {% for other_node in nodes %}
 {% if domain %}
-      grep -q "{{ other_node.name }}.{{ domain }}" /etc/hosts || echo "{{ network.node_ip_map[other_node.name] }} {{ other_node.name }} {{ other_node.name }}.{{ domain }}" >> /etc/hosts
+      grep -q {{ (other_node.name ~ "." ~ domain) | shellescape }} /etc/hosts || echo {{ (network.node_ip_map[other_node.name] ~ " " ~ other_node.name ~ " " ~ other_node.name ~ "." ~ domain) | shellescape }} >> /etc/hosts
 {% else %}
-      grep -q " {{ other_node.name }}$" /etc/hosts || echo "{{ network.node_ip_map[other_node.name] }} {{ other_node.name }}" >> /etc/hosts
+      grep -q {{ (" " ~ other_node.name ~ "$") | shellescape }} /etc/hosts || echo {{ (network.node_ip_map[other_node.name] ~ " " ~ other_node.name) | shellescape }} >> /etc/hosts
 {% endif %}
 {% endfor %}
     SHELL

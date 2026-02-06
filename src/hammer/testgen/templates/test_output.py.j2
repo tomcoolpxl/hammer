@@ -40,18 +40,18 @@ def test_output_{{ test.safe_name }}():
         pytest.skip("Converge log not found - run grading first")
 
 {% if test.match_type == 'regex' %}
-    pattern = r"{{ test.pattern }}"
+    pattern = r"{{ test.pattern | pyescape }}"
     match = re.search(pattern, log_content)
 {% else %}
-    match = "{{ test.pattern }}" in log_content
+    match = "{{ test.pattern | pyescape }}" in log_content
 {% endif %}
 
 {% if test.expected %}
     assert match, \
-        f"Expected Ansible output to contain '{{ test.pattern }}'"
+        f"Expected Ansible output to contain '{{ test.pattern | pyescape }}'"
 {% else %}
     assert not match, \
-        f"Expected Ansible output to NOT contain '{{ test.pattern }}'"
+        f"Expected Ansible output to NOT contain '{{ test.pattern | pyescape }}'"
 {% endif %}
 
 
