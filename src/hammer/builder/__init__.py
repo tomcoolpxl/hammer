@@ -38,9 +38,62 @@ from hammer.testgen import generate_tests
 
 __all__ = [
     "build_assignment",
+    "init_assignment",
     "NetworkPlan",
     "LockArtifact",
 ]
+
+
+def init_assignment(
+    spec: HammerSpec,
+    output_dir: Path,
+    box_version: str = "generic/alma9",
+) -> NetworkPlan:
+    """
+    Generate minimal infrastructure files for manual development.
+
+    Creates only the Vagrantfile, inventory, ansible.cfg, and host_vars
+    needed to `vagrant up` and iterate on a playbook before finalizing
+    the full spec with contracts.
+
+    Args:
+        spec: Validated HAMMER spec
+        output_dir: Directory to write files into
+        box_version: Vagrant box to use (default: generic/alma9)
+
+    Returns:
+        NetworkPlan with resolved IPs for reference
+    """
+    network = generate_network_plan(spec)
+
+    # Create minimal directory structure
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "inventory").mkdir(exist_ok=True)
+    (output_dir / "host_vars").mkdir(exist_ok=True)
+    (output_dir / "roles").mkdir(exist_ok=True)
+
+    # Vagrantfile
+    vagrantfile_content = render_vagrantfile(spec, network, box_version)
+    with open(output_dir / "Vagrantfile", "w") as f:
+        f.write(vagrantfile_content)
+
+    # Inventory
+    inventory_content = render_student_inventory(spec, network)
+    with open(output_dir / "inventory" / "hosts.yml", "w") as f:
+        f.write(inventory_content)
+
+    # ansible.cfg
+    ansible_cfg_content = render_ansible_cfg(
+        inventory_path="inventory/hosts.yml",
+        roles_path="roles",
+    )
+    with open(output_dir / "ansible.cfg", "w") as f:
+        f.write(ansible_cfg_content)
+
+    # Host vars (ansible_host IPs)
+    write_student_host_vars(spec, network, output_dir)
+
+    return network
 
 
 def build_assignment(

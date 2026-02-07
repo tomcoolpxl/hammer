@@ -47,6 +47,23 @@ def main():
         "--spec", type=Path, required=True, help="Path to the assignment spec YAML"
     )
 
+    # hammer init --spec <file> --out <dir>
+    init_parser = subparsers.add_parser(
+        "init", help="Generate Vagrantfile and inventory for manual development"
+    )
+    init_parser.add_argument(
+        "--spec", type=Path, required=True, help="Path to the assignment spec YAML"
+    )
+    init_parser.add_argument(
+        "--out", type=Path, required=True, help="Output directory for infrastructure files"
+    )
+    init_parser.add_argument(
+        "--box-version",
+        type=str,
+        default="generic/alma9",
+        help="Vagrant box to use (default: generic/alma9)",
+    )
+
     # hammer build --spec <file> --out <dir>
     build_parser = subparsers.add_parser("build", help="Build assignment bundles")
     build_parser.add_argument(
@@ -107,6 +124,8 @@ def main():
 
     if args.command == "validate":
         _cmd_validate(args)
+    elif args.command == "init":
+        _cmd_init(args)
     elif args.command == "build":
         _cmd_build(args)
     elif args.command == "grade":
@@ -128,6 +147,51 @@ def _cmd_validate(args):
         console.print("[green]Spec is valid![/green]")
         console.print(f"  Assignment ID: [cyan]{spec.assignment_id}[/cyan]")
         console.print(f"  Nodes: [cyan]{[n.name for n in spec.topology.nodes]}[/cyan]")
+
+    except ValidationError as e:
+        console.print("[red]Validation Error:[/red]")
+        console.print(_format_validation_error(e, args.spec))
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+
+def _cmd_init(args):
+    """Handle the init subcommand."""
+    from hammer.builder import init_assignment
+
+    try:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+            transient=True,
+        ) as progress:
+            task = progress.add_task(description="Loading spec...", total=None)
+            spec = load_spec_from_file(args.spec)
+
+            progress.update(task, description="Generating infrastructure files...")
+            network = init_assignment(
+                spec=spec,
+                output_dir=args.out,
+                box_version=args.box_version,
+            )
+
+        console.print("[green]Init complete![/green]")
+        console.print(f"  Output: [cyan]{args.out}[/cyan]")
+        console.print(f"  Network: [cyan]{network.cidr}[/cyan]")
+        console.print()
+        console.print("[dim]Generated files:[/dim]")
+        console.print(f"  Vagrantfile")
+        console.print(f"  inventory/hosts.yml")
+        console.print(f"  ansible.cfg")
+        for node_name, ip in network.node_ip_map.items():
+            console.print(f"  host_vars/{node_name}*.yml  ({ip})")
+        console.print()
+        console.print("[dim]Next steps:[/dim]")
+        console.print(f"  cd {args.out} && vagrant up")
+        console.print(f"  ansible all -m ping")
 
     except ValidationError as e:
         console.print("[red]Validation Error:[/red]")

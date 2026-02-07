@@ -12,7 +12,7 @@ def check_prerequisites(command: str) -> List[str]:
     """Check that required tools are available for a HAMMER command.
 
     Args:
-        command: The HAMMER subcommand ('validate', 'build', 'grade').
+        command: The HAMMER subcommand ('validate', 'init', 'build', 'grade').
 
     Returns:
         List of missing tool messages. Empty list means all prerequisites met.
