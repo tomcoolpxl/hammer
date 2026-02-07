@@ -41,6 +41,15 @@ def main():
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    # hammer schema [--out <file>]
+    schema_parser = subparsers.add_parser(
+        "schema", help="Print the JSON Schema for spec files"
+    )
+    schema_parser.add_argument(
+        "--out", type=Path, default=None,
+        help="Write schema to file instead of stdout",
+    )
+
     # hammer validate --spec <file>
     validate_parser = subparsers.add_parser("validate", help="Validate a spec file")
     validate_parser.add_argument(
@@ -122,7 +131,9 @@ def main():
             console.print(f"  [yellow]{msg}[/yellow]")
         sys.exit(1)
 
-    if args.command == "validate":
+    if args.command == "schema":
+        _cmd_schema(args)
+    elif args.command == "validate":
         _cmd_validate(args)
     elif args.command == "init":
         _cmd_init(args)
@@ -130,6 +141,21 @@ def main():
         _cmd_build(args)
     elif args.command == "grade":
         _cmd_grade(args)
+
+
+def _cmd_schema(args):
+    """Handle the schema subcommand."""
+    import json
+    from hammer.spec import HammerSpec
+
+    schema = json.dumps(HammerSpec.model_json_schema(), indent=2)
+
+    if args.out:
+        with open(args.out, "w") as f:
+            f.write(schema + "\n")
+        console.print(f"Schema written to [cyan]{args.out}[/cyan]")
+    else:
+        print(schema)
 
 
 def _cmd_validate(args):

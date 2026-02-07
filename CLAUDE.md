@@ -8,15 +8,12 @@ The core goal is to generate complete student bundles and grading bundles from a
 
 ## Key Documents & Structure
 
-The project documentation is organized into the `docs/` directory:
-
-*   **`REQUIREMENTS.md`**: The source of truth for scope, objectives, non-goals, and high-level architecture.
-*   **`SPEC_SCHEMA.md`**: Contains the strict **JSON Schema (v1.0)** for the assignment specification file.
-*   **`docs/design/01_spec_models.md`**: (Formerly `PYDANTIC_MODEL_SET.md`) Provides the **Pydantic v2** data models.
-*   **`docs/design/02_normalization_logic.md`**: (Formerly `NORMALIZATION_MODEL_AND EXEC_PLAN_BUILDER.md`) Defines the "Phase Normalization" layer and Execution Plan.
-*   **`docs/planning/IMPLEMENTATION_ROADMAP.md`**: The detailed, phased implementation plan.
+*   **`SPEC_SCHEMA.md`**: Auto-generated JSON Schema from Pydantic models (regenerate with `hammer schema`).
 *   **`docs/user-guide/`**: User documentation for spec authoring and CLI usage.
-*   **`docs/E2E_TEST_ANALYSIS.md`**: E2E test analysis and implementation status.
+*   **`docs/QUICKSTART.md`**: 5-minute getting started guide.
+*   **`docs/TROUBLESHOOTING.md`**: Common issues and fixes.
+*   **`CONTRIBUTING.md`**: Development setup and guidelines.
+*   **`REMAINING_ITEMS.md`**: Tracks unimplemented items from the code review.
 
 ## Architecture
 
@@ -217,12 +214,7 @@ idempotence:
 
 ## Next Steps
 
-Please refer to **`docs/planning/IMPLEMENTATION_ROADMAP.md`** for the detailed step-by-step plan.
-
-### Completed
-- ✅ End-to-end testing with PE1, PE3, PE4 assignments
-- ✅ User documentation in `docs/user-guide/`
-- ✅ Solution playbooks/roles for E2E testing
+See **`REMAINING_ITEMS.md`** for tracked items from the code review.
 
 ### Remaining
 - PE2 solution and E2E tests

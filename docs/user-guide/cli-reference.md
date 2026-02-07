@@ -1,5 +1,23 @@
 # HAMMER CLI Reference
 
+## `hammer schema`
+
+Prints the JSON Schema for HAMMER spec files, generated directly from the Pydantic models.
+
+**Usage:**
+```bash
+# Print to stdout
+hammer schema
+
+# Write to file
+hammer schema --out SPEC_SCHEMA.md
+```
+
+**Options:**
+- `--out`: Write schema to a file instead of stdout.
+
+---
+
 ## `hammer validate`
 
 Validates a specification file against the HAMMER schema.

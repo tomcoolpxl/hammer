@@ -22,6 +22,16 @@ HAMMER is an automated grading system for Ansible assignments. It validates stud
 - **Output verification**: Check Ansible debug messages and output patterns
 - **Expected failures**: Allow specific task failures for error handling assignments
 
+## Documentation
+
+- **[Quickstart](docs/QUICKSTART.md)** — Get up and running in 5 minutes
+- **[Creating Specs](docs/user-guide/creating-specs.md)** — How to write assignment specifications
+- **[CLI Reference](docs/user-guide/cli-reference.md)** — Detailed command documentation
+- **[Spec Schema](SPEC_SCHEMA.md)** — Auto-generated JSON Schema (regenerate with `hammer schema`)
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** — Common issues and fixes
+- **[Contributing](CONTRIBUTING.md)** — Development setup and guidelines
+- **[PE1 Walkthrough](docs/user-guide/examples/pe1-walkthrough.md)** — Step-by-step example
+
 ## Requirements
 
 - Python 3.10+
@@ -60,7 +70,7 @@ ansible-galaxy collection install ansible.posix
 
 ## Usage
 
-HAMMER provides three main commands: `validate`, `build`, and `grade`.
+HAMMER provides five commands: `schema`, `validate`, `init`, `build`, and `grade`.
 
 ### Validate a Specification
 
@@ -69,6 +79,24 @@ Check that a spec file is valid:
 ```bash
 hammer validate --spec path/to/spec.yaml
 ```
+
+### Initialize Infrastructure for Development
+
+Generate only the Vagrantfile, inventory, and ansible.cfg — just enough to `vagrant up` and manually iterate on your playbook before finalizing contracts:
+
+```bash
+hammer init --spec path/to/spec.yaml --out ./lab
+cd ./lab && vagrant up
+ansible all -m ping
+ansible-playbook site.yml
+```
+
+This creates only: `Vagrantfile`, `inventory/hosts.yml`, `ansible.cfg`, `host_vars/`, and `roles/`.
+
+Options:
+- `--spec` - (Required) Path to the spec file
+- `--out` - (Required) Directory to write infrastructure files into
+- `--box-version` - Vagrant box to use (default: `generic/alma9`)
 
 ### Build Assignment Bundles
 
@@ -84,6 +112,8 @@ This creates:
 - `lock.json` - Reproducibility artifact with checksums
 
 Options:
+- `--spec` - (Required) Path to the spec file
+- `--out` - (Required) Directory to create bundles in
 - `--box-version` - Vagrant box to use (default: `generic/alma9`)
 
 ### Grade a Student Submission
@@ -479,37 +509,55 @@ phase_overlays:
 ```
 hammer/
 ├── src/hammer/
-│   ├── spec.py          # Pydantic models for spec validation
-│   ├── plan.py          # Execution plan builder
-│   ├── cli.py           # CLI entry points
-│   ├── builder/         # Bundle generation
-│   │   ├── network.py   # Deterministic IP assignment
+│   ├── spec/              # Pydantic models (package)
+│   │   ├── primitives.py  # Type aliases, enums
+│   │   ├── topology.py    # Node, Topology models
+│   │   ├── contracts.py   # Behavioral contract types
+│   │   ├── variables.py   # VariableContract, bindings
+│   │   ├── entrypoints.py # Entrypoints model
+│   │   ├── overlays.py    # Phase overlay models
+│   │   └── root.py        # HammerSpec + cross-field validation
+│   ├── plan.py            # Execution plan builder
+│   ├── cli.py             # CLI entry points
+│   ├── constants.py       # Phase name constants
+│   ├── exceptions.py      # HammerError hierarchy
+│   ├── validators.py      # Input sanitization (SafeIdentifier, etc.)
+│   ├── prerequisites.py   # Tool availability checks
+│   ├── utils.py           # Path validation utilities
+│   ├── builder/           # Bundle generation
+│   │   ├── network.py     # Deterministic IP assignment
 │   │   ├── vagrantfile.py
 │   │   ├── inventory.py
-│   │   └── templates/   # Jinja2 templates
-│   ├── testgen/         # Test file generation
+│   │   ├── scaffolding.py
+│   │   ├── lock.py        # Reproducibility artifact
+│   │   └── templates/     # Jinja2 templates
+│   ├── testgen/           # Test file generation
 │   │   ├── bindings.py
 │   │   ├── behavioral.py
 │   │   ├── reachability.py
-│   │   └── templates/   # Test templates
-│   └── runner/          # Grading execution
-│       ├── ansible.py   # Playbook runner
-│       ├── reboot.py    # Node reboot handling
+│   │   ├── utils.py       # Shared helpers
+│   │   └── templates/     # Test templates
+│   └── runner/            # Grading execution
+│       ├── ansible.py     # Playbook runner
+│       ├── reboot.py      # Node reboot handling
 │       ├── pytest_runner.py
-│       └── results.py   # Result models
+│       ├── snapshot.py    # State capture
+│       └── results.py     # Result models
 ├── tests/
-│   ├── unit/            # Unit tests
-│   ├── integration/     # Integration tests (no VMs)
-│   ├── e2e/             # End-to-end tests (with VMs)
-│   └── fixtures/        # Test specs and playbooks
-├── real_examples/       # Real assignment examples
-│   ├── PE1/             # Pyramid app (with solution)
-│   ├── PE2/             # Multi-node deployment
-│   ├── PE3/             # Nginx webserver (with solution)
-│   └── PE4/             # Role-based exam (with solution)
+│   ├── unit/              # Unit tests
+│   ├── integration/       # Integration tests (no VMs)
+│   ├── e2e/               # End-to-end tests (with VMs)
+│   └── fixtures/          # Test specs and playbooks
+├── real_examples/         # Real assignment examples
+│   ├── PE1/               # Pyramid app (with solution)
+│   ├── PE2/               # Multi-node deployment
+│   ├── PE3/               # Nginx webserver (with solution)
+│   └── PE4/               # Role-based exam (with solution)
 └── docs/
-    ├── user-guide/      # User documentation
-    └── planning/        # Design documents
+    ├── user-guide/        # User documentation
+    ├── planning/          # Design documents
+    ├── QUICKSTART.md      # 5-minute getting started
+    └── TROUBLESHOOTING.md # Common issues
 ```
 
 ## Development
@@ -569,6 +617,14 @@ See the `real_examples/` directory for complete working examples:
 - **PE4**: Role-based exam with users, services, conditional files, and reboot testing (solution: `roles/pxl_exam_role/`)
 
 PE1, PE3, and PE4 include solution playbooks/roles for E2E testing.
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HAMMER_PLAYBOOK_TIMEOUT` | 600 | Ansible playbook timeout (seconds) |
+| `HAMMER_PYTEST_TIMEOUT` | 300 | Pytest test timeout (seconds) |
+| `HAMMER_REBOOT_TIMEOUT` | 120 | Node reboot timeout (seconds) |
 
 ## License
 

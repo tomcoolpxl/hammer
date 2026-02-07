@@ -26,7 +26,21 @@ hammer validate --spec real_examples/PE1/spec.yaml
 
 This checks YAML syntax, Pydantic model validation, and cross-field semantic rules.
 
-## 2. Build Assignment Bundles
+## 2. Init Infrastructure (for assignment development)
+
+When developing a new assignment, use `init` to generate just the Vagrantfile and inventory so you can manually test your playbook:
+
+```bash
+hammer init --spec real_examples/PE1/spec.yaml --out /tmp/pe1-lab
+cd /tmp/pe1-lab
+vagrant up
+ansible all -m ping
+ansible-playbook site.yml
+```
+
+Once your playbook works, go back and add contracts to your spec, then use `build` for the full bundles.
+
+## 3. Build Assignment Bundles
 
 ```bash
 hammer build --spec real_examples/PE1/spec.yaml --out /tmp/pe1-build
@@ -37,7 +51,7 @@ This generates:
 - `grading_bundle/` — Inventory, overlays, generated pytest tests
 - `lock.json` — Deterministic build metadata
 
-## 3. Grade a Submission
+## 4. Grade a Submission
 
 ```bash
 hammer grade \
@@ -49,7 +63,7 @@ hammer grade \
 
 This runs the full pipeline: build, vagrant up, converge, test, report.
 
-## 4. Run Specific Phases
+## 5. Run Specific Phases
 
 ```bash
 hammer grade \

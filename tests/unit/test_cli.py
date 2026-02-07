@@ -84,6 +84,61 @@ class TestMissingArgs:
         assert result.returncode != 0
 
 
+class TestInitCommand:
+    """Tests for `hammer init` subcommand."""
+
+    def test_init_creates_infrastructure_files(self, tmp_path):
+        """init generates Vagrantfile, inventory, ansible.cfg, and host_vars."""
+        out_dir = tmp_path / "lab"
+        result = subprocess.run(
+            [sys.executable, "-m", "hammer.cli", "init",
+             "--spec", str(REAL_EXAMPLES / "PE1" / "spec.yaml"),
+             "--out", str(out_dir)],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0
+        assert "Init complete" in result.stdout
+
+        # Check expected files exist
+        assert (out_dir / "Vagrantfile").is_file()
+        assert (out_dir / "inventory" / "hosts.yml").is_file()
+        assert (out_dir / "ansible.cfg").is_file()
+        assert (out_dir / "host_vars").is_dir()
+        assert (out_dir / "roles").is_dir()
+
+        # Check NO grading/test artifacts were generated
+        assert not (out_dir / "student_bundle").exists()
+        assert not (out_dir / "grading_bundle").exists()
+        assert not (out_dir / "lock.json").exists()
+
+    def test_init_no_out_arg(self):
+        """init without --out exits non-zero."""
+        result = subprocess.run(
+            [sys.executable, "-m", "hammer.cli", "init",
+             "--spec", str(REAL_EXAMPLES / "PE1" / "spec.yaml")],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode != 0
+
+    def test_init_invalid_spec(self, tmp_path):
+        """init with invalid spec exits non-zero."""
+        bad_spec = tmp_path / "bad.yaml"
+        bad_spec.write_text("assignment_id: 123\n")
+        result = subprocess.run(
+            [sys.executable, "-m", "hammer.cli", "init",
+             "--spec", str(bad_spec),
+             "--out", str(tmp_path / "out")],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode != 0
+
+    def test_init_needs_no_tools(self):
+        """init command doesn't require any external tools."""
+        from hammer.prerequisites import check_prerequisites
+        missing = check_prerequisites("init")
+        assert missing == []
+
+
 class TestValidationErrorFormatting:
     """Tests for user-friendly validation error formatting."""
 
