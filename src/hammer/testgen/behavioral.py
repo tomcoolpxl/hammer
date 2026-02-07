@@ -3,7 +3,6 @@
 Generates tests for packages, services, files, and firewall.
 """
 
-import re
 from typing import Any, Dict, List
 
 from hammer.plan import (
@@ -18,14 +17,7 @@ from hammer.plan import (
     HttpEndpointCheck,
     HandlerPlan,
 )
-
-
-def _make_safe_name(s: str) -> str:
-    """Convert a string to a valid Python identifier."""
-    safe = re.sub(r"[^a-zA-Z0-9]", "_", s)
-    safe = re.sub(r"^[0-9]+", "", safe)
-    safe = re.sub(r"_+", "_", safe)
-    return safe.strip("_").lower()
+from hammer.testgen.utils import make_safe_name, resolve_port
 
 
 def generate_package_tests(contract: PhaseContractPlan) -> List[Dict[str, Any]]:
@@ -126,7 +118,7 @@ def generate_file_tests(contract: PhaseContractPlan) -> List[Dict[str, Any]]:
 
             file_items.append({
                 "path": item["path"],
-                "safe_name": _make_safe_name(item["path"]),
+                "safe_name": make_safe_name(item["path"]),
                 "present": item["present"],
                 "is_directory": item.get("is_directory", False),
                 "mode": mode,
@@ -142,22 +134,6 @@ def generate_file_tests(contract: PhaseContractPlan) -> List[Dict[str, Any]]:
         })
 
     return tests
-
-
-def _resolve_port(port_val: Any, resolved_vars: Dict[str, Any]) -> Any:
-    """Resolve a port value, handling variable references."""
-    # Check if it's a PortRefVar (has a 'var' attribute)
-    if hasattr(port_val, "var"):
-        var_name = port_val.var
-        return resolved_vars.get(var_name, port_val)
-
-    # Check if it's a dict with 'var' key
-    if isinstance(port_val, dict) and "var" in port_val:
-        var_name = port_val["var"]
-        return resolved_vars.get(var_name, port_val)
-
-    # Already an int or other value
-    return port_val
 
 
 def generate_firewall_tests(
@@ -177,7 +153,7 @@ def generate_firewall_tests(
         ports = []
         for port_spec in fw.ports:
             port_val = port_spec.get("port")
-            port_val = _resolve_port(port_val, resolved_vars)
+            port_val = resolve_port(port_val, resolved_vars)
 
             ports.append({
                 "port": port_val,
@@ -227,7 +203,7 @@ def generate_http_endpoint_tests(
             "response_regex": http.response_regex,
             "timeout_seconds": http.timeout_seconds,
             "hosts": http.host_targets,
-            "safe_name": _make_safe_name(url),
+            "safe_name": make_safe_name(url),
             "weight": http.weight,
         })
 
@@ -251,7 +227,7 @@ def generate_external_http_tests(
             "response_contains": ext.response_contains,
             "response_regex": ext.response_regex,
             "timeout_seconds": ext.timeout_seconds,
-            "safe_name": _make_safe_name(url),
+            "safe_name": make_safe_name(url),
             "weight": ext.weight,
         }
 
@@ -293,9 +269,9 @@ def generate_output_tests(contract: PhaseContractPlan) -> List[Dict[str, Any]]:
     for idx, check in enumerate(contract.output_checks):
         # Create a safe name from description or pattern
         if check.description:
-            safe_name = _make_safe_name(check.description)
+            safe_name = make_safe_name(check.description)
         else:
-            safe_name = _make_safe_name(check.pattern[:30])
+            safe_name = make_safe_name(check.pattern[:30])
 
         # Ensure uniqueness
         safe_name = f"{safe_name}_{idx}"

@@ -1,4 +1,4 @@
-from typing import Dict, List, Any, Literal, Tuple
+from typing import Dict, List, Any, Literal, Tuple, Union
 from pydantic import BaseModel
 
 from hammer.spec import (
@@ -13,9 +13,12 @@ ExecutionPhaseName = Literal["baseline", "mutation", "idempotence"]
 # Variable resolution
 # -------------------------
 
+ScalarValue = Union[int, str, bool, float, list, dict, None]
+
+
 class ResolvedVariable(BaseModel):
     name: str
-    value: Any
+    value: ScalarValue
     source: str  # group_vars, host_vars, inventory_vars, extra_vars, default
 
 
@@ -39,7 +42,7 @@ class BindingCheck(BaseModel):
     binding_index: int
     binding_type: str
     binding_target: Dict[str, Any]
-    expected_value: Any
+    expected_value: ScalarValue
     weight: float
 
 

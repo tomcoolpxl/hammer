@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from hammer.runner.results import TestResult, TestCaseResult
+from hammer.constants import ALL_PHASES
 
 
 def run_phase_tests(
@@ -166,7 +167,7 @@ def run_all_phase_tests(
         Dict mapping phase name to (TestResult, stdout)
     """
     if phases is None:
-        phases = ["baseline", "mutation", "idempotence"]
+        phases = list(ALL_PHASES)
 
     results = {}
     for phase in phases:

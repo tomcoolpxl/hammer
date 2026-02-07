@@ -26,6 +26,7 @@ from hammer.testgen.behavioral import (
     generate_output_tests,
 )
 from hammer.testgen.reachability import generate_reachability_tests
+from hammer.constants import ALL_PHASES
 
 
 __all__ = ["generate_tests"]
@@ -100,7 +101,7 @@ def generate_tests(
     generated_files.append(conftest_path)
 
     # Generate phase-specific tests
-    for phase in ["baseline", "mutation", "idempotence"]:
+    for phase in ALL_PHASES:
         phase_dir = tests_dir / phase
         phase_dir.mkdir(exist_ok=True)
 

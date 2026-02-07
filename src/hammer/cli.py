@@ -12,6 +12,7 @@ from rich import box
 
 from hammer.spec import load_spec_from_file
 from hammer.prerequisites import check_prerequisites
+from hammer.constants import ALL_PHASES
 
 
 console = Console()
@@ -79,7 +80,7 @@ def main():
     grade_parser.add_argument(
         "--phase",
         type=str,
-        choices=["baseline", "mutation", "idempotence"],
+        choices=ALL_PHASES,
         action="append",
         help="Run only specific phase(s) (can be repeated)",
     )

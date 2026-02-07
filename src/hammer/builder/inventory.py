@@ -12,6 +12,7 @@ from jinja2 import Environment, FileSystemLoader
 from hammer.spec import HammerSpec, Node
 from hammer.plan import ExecutionPlan
 from hammer.builder.network import NetworkPlan
+from hammer.constants import OVERLAY_PHASES
 
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -246,7 +247,7 @@ def write_grading_phase_overlays(
     """
     overlays_dir = output_dir / "overlays"
 
-    for phase_name in ["baseline", "mutation"]:
+    for phase_name in OVERLAY_PHASES:
         phase_dir = overlays_dir / phase_name
         phase_dir.mkdir(parents=True, exist_ok=True)
 

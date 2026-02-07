@@ -26,6 +26,7 @@ from hammer.runner.ansible import run_playbook, check_idempotence
 from hammer.runner.pytest_runner import run_phase_tests
 from hammer.runner.snapshot import write_snapshot_playbook
 from hammer.runner.reboot import reboot_nodes
+from hammer.constants import ALL_PHASES, PHASE_IDEMPOTENCE, PHASE_MUTATION
 
 
 __all__ = ["grade_assignment", "GradeReport"]
@@ -58,7 +59,7 @@ def grade_assignment(
         GradeReport with all results
     """
     if phases is None:
-        phases = ["baseline", "mutation", "idempotence"]
+        phases = list(ALL_PHASES)
 
     # Create output directory structure
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -281,7 +282,7 @@ def _run_phase(
     """
     # Get phase-specific overlay
     # For idempotence, use mutation overlay
-    overlay_phase = "mutation" if phase == "idempotence" else phase
+    overlay_phase = PHASE_MUTATION if phase == PHASE_IDEMPOTENCE else phase
     overlay_dir = grading_dir / "overlays" / overlay_phase
     extra_vars_file = overlay_dir / "extra_vars.yml"
 
@@ -331,7 +332,7 @@ def _run_phase(
             print(f"[{phase}] Converge Error: {converge_result.error_message}")
 
     # Check for failure policy and reboot configuration
-    overlay_phase_name = "mutation" if phase == "idempotence" else phase
+    overlay_phase_name = PHASE_MUTATION if phase == PHASE_IDEMPOTENCE else phase
     phase_overlay = getattr(spec.phase_overlays, overlay_phase_name, None)
 
     # Apply failure policy if configured
@@ -382,7 +383,7 @@ def _run_phase(
                 print(f"[{phase}] {node} rebooted in {result.duration:.1f}s")
 
     # Special handling for idempotence phase
-    if phase == "idempotence":
+    if phase == PHASE_IDEMPOTENCE:
         is_idempotent, idempotence_msg = check_idempotence(converge_result)
         if verbose:
             print(f"[{phase}] Idempotence check: {idempotence_msg}")
@@ -393,7 +394,7 @@ def _run_phase(
 
     # Determine which phase's tests to run
     # For idempotence, we run the same tests as mutation phase
-    test_phase = "mutation" if phase == "idempotence" else phase
+    test_phase = PHASE_MUTATION if phase == PHASE_IDEMPOTENCE else phase
 
     test_result, test_log = run_phase_tests(
         tests_dir=tests_dir,

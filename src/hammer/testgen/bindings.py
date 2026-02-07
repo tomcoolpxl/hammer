@@ -3,22 +3,11 @@
 Generates tests that verify variable bindings are correctly applied.
 """
 
-import re
 from typing import Any, Dict, List
 
 from hammer.plan import BindingCheck, PhaseContractPlan
 from hammer.spec import HammerSpec
-
-
-def _make_safe_name(s: str) -> str:
-    """Convert a string to a valid Python identifier."""
-    # Replace non-alphanumeric chars with underscores
-    safe = re.sub(r"[^a-zA-Z0-9]", "_", s)
-    # Remove leading digits
-    safe = re.sub(r"^[0-9]+", "", safe)
-    # Collapse multiple underscores
-    safe = re.sub(r"_+", "_", safe)
-    return safe.strip("_").lower()
+from hammer.testgen.utils import make_safe_name
 
 
 def generate_binding_tests(
@@ -56,7 +45,7 @@ def generate_binding_tests(
 
         for host in hosts:
             test_data = {
-                "test_name": _make_safe_name(
+                "test_name": make_safe_name(
                     f"{binding.variable}_{binding_type}_{host}"
                 ),
                 "host": host,
