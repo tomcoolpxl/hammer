@@ -256,6 +256,93 @@ def _check_failure_policy(
     return True
 
 
+def _apply_phase_overlay(grading_dir: Path, phase: str) -> Path:
+    """Apply phase overlay group_vars and return extra_vars path.
+
+    For idempotence, uses the mutation overlay.
+    """
+    overlay_phase = PHASE_MUTATION if phase == PHASE_IDEMPOTENCE else phase
+    overlay_dir = grading_dir / "overlays" / overlay_phase
+    extra_vars_file = overlay_dir / "extra_vars.yml"
+
+    overlay_group_vars = overlay_dir / "group_vars"
+    main_group_vars = grading_dir / "group_vars"
+
+    if overlay_group_vars.exists():
+        for gv_file in overlay_group_vars.glob("*.yml"):
+            dst = main_group_vars / gv_file.name
+            shutil.copy2(gv_file, dst)
+
+    return extra_vars_file
+
+
+def _evaluate_failure_policy(
+    converge_result: ConvergeResult,
+    converge_log: str,
+    phase_overlay,
+    phase: str,
+    verbose: bool,
+) -> ConvergeResult:
+    """Apply failure policy if configured, potentially overriding success status."""
+    if not (phase_overlay and phase_overlay.failure_policy):
+        return converge_result
+
+    policy = phase_overlay.failure_policy
+    failures_allowed = _check_failure_policy(
+        converge_result, converge_log, policy, verbose
+    )
+    if failures_allowed:
+        converge_result = ConvergeResult(
+            ok=converge_result.ok,
+            changed=converge_result.changed,
+            failed=converge_result.failed,
+            unreachable=converge_result.unreachable,
+            skipped=converge_result.skipped,
+            rescued=converge_result.rescued,
+            ignored=converge_result.ignored,
+            play_recap=converge_result.play_recap,
+            handlers_run=converge_result.handlers_run,
+            success=True,
+            error_message=None,
+        )
+        if verbose:
+            print(f"[{phase}] Failures allowed by policy")
+
+    return converge_result
+
+
+def _handle_phase_reboot(
+    phase_overlay,
+    inventory_path: Path,
+    results_dir: Path,
+    phase: str,
+    verbose: bool,
+) -> None:
+    """Handle node reboots if configured in the phase overlay."""
+    if not (phase_overlay and phase_overlay.reboot and phase_overlay.reboot.enabled):
+        return
+
+    if verbose:
+        print(f"\n[{phase}] Rebooting nodes...")
+
+    reboot_results = reboot_nodes(
+        inventory_path=inventory_path,
+        nodes=phase_overlay.reboot.nodes,
+        timeout=phase_overlay.reboot.timeout,
+        poll_interval=phase_overlay.reboot.poll_interval,
+    )
+
+    for node, result in reboot_results.items():
+        if not result.success:
+            if verbose:
+                print(f"[{phase}] Reboot FAILED for {node}: {result.error}")
+            (results_dir / "reboot_failure.txt").write_text(
+                f"Node: {node}\nError: {result.error}\n"
+            )
+        elif verbose:
+            print(f"[{phase}] {node} rebooted in {result.duration:.1f}s")
+
+
 def _run_phase(
     spec: HammerSpec,
     plan: ExecutionPlan,
@@ -265,36 +352,9 @@ def _run_phase(
     results_dir: Path,
     verbose: bool = False,
 ) -> PhaseResult:
-    """
-    Run a single grading phase.
-
-    Args:
-        spec: The HAMMER spec
-        plan: The execution plan
-        network: The network plan
-        phase: Phase name
-        grading_dir: Grading bundle directory
-        results_dir: Directory for phase results
-        verbose: Enable verbose output
-
-    Returns:
-        PhaseResult for this phase
-    """
-    # Get phase-specific overlay
-    # For idempotence, use mutation overlay
-    overlay_phase = PHASE_MUTATION if phase == PHASE_IDEMPOTENCE else phase
-    overlay_dir = grading_dir / "overlays" / overlay_phase
-    extra_vars_file = overlay_dir / "extra_vars.yml"
-
-    # Apply overlay group_vars by copying to main group_vars
-    overlay_group_vars = overlay_dir / "group_vars"
-    main_group_vars = grading_dir / "group_vars"
-
-    if overlay_group_vars.exists():
-        # Copy overlay group_vars to main group_vars
-        for gv_file in overlay_group_vars.glob("*.yml"):
-            dst = main_group_vars / gv_file.name
-            shutil.copy2(gv_file, dst)
+    """Run a single grading phase: converge, apply policies, verify."""
+    # Apply overlay
+    extra_vars_file = _apply_phase_overlay(grading_dir, phase)
 
     # Paths
     playbook_path = grading_dir / spec.entrypoints.playbook_path
@@ -316,13 +376,11 @@ def _run_phase(
     if verbose:
         print(converge_log)
 
-    # Save converge log
+    # Save converge artifacts
     (results_dir / "converge.log").write_text(converge_log)
     (results_dir / "converge_result.json").write_text(
         converge_result.model_dump_json(indent=2)
     )
-
-    # Write handler runs for test verification
     write_handler_runs(grading_dir, phase, converge_result)
 
     if verbose:
@@ -331,58 +389,15 @@ def _run_phase(
         if not converge_result.success and converge_result.error_message:
             print(f"[{phase}] Converge Error: {converge_result.error_message}")
 
-    # Check for failure policy and reboot configuration
+    # Post-converge: failure policy, reboot, idempotence check
     overlay_phase_name = PHASE_MUTATION if phase == PHASE_IDEMPOTENCE else phase
     phase_overlay = getattr(spec.phase_overlays, overlay_phase_name, None)
 
-    # Apply failure policy if configured
-    if phase_overlay and phase_overlay.failure_policy:
-        policy = phase_overlay.failure_policy
-        failures_allowed = _check_failure_policy(
-            converge_result, converge_log, policy, verbose
-        )
-        if failures_allowed:
-            # Mark as successful despite failures - they were expected
-            converge_result = ConvergeResult(
-                ok=converge_result.ok,
-                changed=converge_result.changed,
-                failed=converge_result.failed,
-                unreachable=converge_result.unreachable,
-                skipped=converge_result.skipped,
-                rescued=converge_result.rescued,
-                ignored=converge_result.ignored,
-                play_recap=converge_result.play_recap,
-                handlers_run=converge_result.handlers_run,
-                success=True,  # Override to success
-                error_message=None,
-            )
-            if verbose:
-                print(f"[{phase}] Failures allowed by policy")
+    converge_result = _evaluate_failure_policy(
+        converge_result, converge_log, phase_overlay, phase, verbose
+    )
+    _handle_phase_reboot(phase_overlay, inventory_path, results_dir, phase, verbose)
 
-    if phase_overlay and phase_overlay.reboot and phase_overlay.reboot.enabled:
-        if verbose:
-            print(f"\n[{phase}] Rebooting nodes...")
-
-        reboot_results = reboot_nodes(
-            inventory_path=inventory_path,
-            nodes=phase_overlay.reboot.nodes,
-            timeout=phase_overlay.reboot.timeout,
-            poll_interval=phase_overlay.reboot.poll_interval,
-        )
-
-        # Log results and check for failures
-        for node, result in reboot_results.items():
-            if not result.success:
-                if verbose:
-                    print(f"[{phase}] Reboot FAILED for {node}: {result.error}")
-                # Save reboot failure info
-                (results_dir / "reboot_failure.txt").write_text(
-                    f"Node: {node}\nError: {result.error}\n"
-                )
-            elif verbose:
-                print(f"[{phase}] {node} rebooted in {result.duration:.1f}s")
-
-    # Special handling for idempotence phase
     if phase == PHASE_IDEMPOTENCE:
         is_idempotent, idempotence_msg = check_idempotence(converge_result)
         if verbose:
@@ -392,10 +407,7 @@ def _run_phase(
     if verbose:
         print(f"\n[{phase}] Running verification tests...")
 
-    # Determine which phase's tests to run
-    # For idempotence, we run the same tests as mutation phase
     test_phase = PHASE_MUTATION if phase == PHASE_IDEMPOTENCE else phase
-
     test_result, test_log = run_phase_tests(
         tests_dir=tests_dir,
         phase=test_phase,
@@ -403,7 +415,6 @@ def _run_phase(
         verbose=verbose,
     )
 
-    # Save test results
     (results_dir / "test.log").write_text(test_log)
     (results_dir / "test_result.json").write_text(
         test_result.model_dump_json(indent=2)
@@ -413,7 +424,6 @@ def _run_phase(
         print(f"[{phase}] Tests: passed={test_result.passed}, "
               f"failed={test_result.failed}, skipped={test_result.skipped}")
 
-    # Calculate phase score
     earned, max_score = calculate_phase_score(test_result)
 
     return PhaseResult(
