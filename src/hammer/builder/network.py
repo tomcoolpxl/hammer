@@ -40,6 +40,13 @@ def generate_network_plan(spec: HammerSpec) -> NetworkPlan:
     gateway = f"192.168.{subnet_octet}.1"
     netmask = "255.255.255.0"
 
+    # Validate node count (IPs start at .10, max .254)
+    if len(spec.topology.nodes) > 245:
+        raise ValueError(
+            f"Too many nodes ({len(spec.topology.nodes)}): maximum is 245 "
+            f"(IPs .10 through .254 in a /24 subnet)"
+        )
+
     # Assign IPs to nodes starting at .10
     node_ip_map: Dict[str, str] = {}
     for idx, node in enumerate(spec.topology.nodes):

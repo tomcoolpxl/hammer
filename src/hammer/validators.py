@@ -34,16 +34,15 @@ def _check_domain(v: str) -> str:
 
 
 def _check_safe_path(v: str) -> str:
-    """Validate that a path is safe (no traversal, no shell metacharacters)."""
+    """Validate that a path is safe (no traversal, no shell metacharacters).
+
+    This allows absolute paths (for remote VM paths like /etc/nginx/...)
+    but prevents shell injection and directory traversal.
+    """
     if not v:
         raise ValueError("Path must not be empty")
     if '..' in v.split('/'):
         raise ValueError(f"Path traversal not allowed: {v!r}")
-    if v.startswith('/') and not v.startswith('/etc/') and not v.startswith('/opt/') \
-       and not v.startswith('/usr/') and not v.startswith('/var/') \
-       and not v.startswith('/tmp/') and not v.startswith('/home/') \
-       and not v.startswith('/srv/'):
-        raise ValueError(f"Absolute path outside allowed prefixes: {v!r}")
     if re.search(r'[;&|$`\\]', v):
         raise ValueError(f"Unsafe characters in path: {v!r}")
     return v

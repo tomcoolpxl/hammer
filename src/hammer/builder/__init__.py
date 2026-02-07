@@ -159,9 +159,11 @@ def _copy_provided_files(
     checksums: Dict[str, str],
 ) -> None:
     """Copy provided_files from spec directory to student bundle."""
+    from hammer.utils import validate_path_within
+
     for pf in spec.entrypoints.provided_files:
-        src = spec_dir / pf.source
-        dst = output_dir / pf.destination
+        src = validate_path_within(Path(pf.source), spec_dir)
+        dst = validate_path_within(Path(pf.destination), output_dir)
 
         if not src.exists():
             raise FileNotFoundError(
@@ -225,9 +227,13 @@ def _build_grading_bundle(
 
     # Vault password file (if vault is configured)
     if spec.vault:
+        import os
         vault_pass_path = output_dir / ".vault_pass"
-        vault_pass_path.write_text(spec.vault.vault_password)
-        vault_pass_path.chmod(0o600)
+        fd = os.open(str(vault_pass_path), os.O_CREAT | os.O_WRONLY | os.O_EXCL, 0o600)
+        try:
+            os.write(fd, spec.vault.vault_password.encode())
+        finally:
+            os.close(fd)
         checksums["grading_bundle/.vault_pass"] = compute_file_checksum(spec.vault.vault_password)
 
     # Generate tests

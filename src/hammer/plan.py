@@ -249,17 +249,17 @@ def build_phase_variable_plan(spec: HammerSpec, phase_name: ExecutionPhaseName) 
             value = inventory_vars[var.name]
             source = "inventory_vars"
 
-        # group vars override inventory
+        # group vars override inventory (preserve YAML insertion order, matching Ansible behavior)
         if group_vars:
-            for group_name in sorted(group_vars.keys()):
+            for group_name in group_vars:
                 gv = group_vars[group_name]
                 if var.name in gv:
                     value = gv[var.name]
                     source = "group_vars"
 
-        # host vars override group
+        # host vars override group (preserve YAML insertion order)
         if host_vars:
-            for host_name in sorted(host_vars.keys()):
+            for host_name in host_vars:
                 hv = host_vars[host_name]
                 if var.name in hv:
                     value = hv[var.name]

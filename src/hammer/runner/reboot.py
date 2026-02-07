@@ -98,11 +98,23 @@ def _reboot_single_node(
             error=f"Failed to send reboot command: {e}",
         )
 
-    # Wait a moment for the reboot to initiate
-    time.sleep(5)
+    # Phase 1: Wait for SSH to go DOWN (confirms reboot initiated)
+    ssh_went_down = False
+    for _ in range(30):
+        if not _check_ssh_available(inventory_path, node):
+            ssh_went_down = True
+            break
+        time.sleep(1)
 
-    # Poll for SSH to come back
-    elapsed = 0
+    if not ssh_went_down:
+        return RebootResult(
+            success=False,
+            duration=time.time() - start_time,
+            error=f"SSH never went down on {node} - reboot may not have initiated",
+        )
+
+    # Phase 2: Wait for SSH to come back
+    elapsed = time.time() - start_time
     while elapsed < timeout:
         if _check_ssh_available(inventory_path, node):
             return RebootResult(

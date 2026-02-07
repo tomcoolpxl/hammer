@@ -43,7 +43,7 @@ def get_files_to_check(spec: HammerSpec, plan: ExecutionPlan) -> List[str]:
                 files.add(item.path)
 
     # Get files from binding targets
-    for var in spec.variable_contracts:
+    for var in (spec.variable_contracts or []):
         for binding in var.binding_targets:
             target = binding.target
             if hasattr(target, "path"):

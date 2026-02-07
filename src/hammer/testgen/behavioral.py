@@ -120,15 +120,9 @@ def generate_file_tests(contract: PhaseContractPlan) -> List[Dict[str, Any]]:
         for item in fc.items:
             # Convert mode string to octal integer for Python comparison
             mode = None
-            if item.get("mode"):
-                mode_str = item["mode"]
-                # Handle both "0644" and "644" formats
-                if mode_str.startswith("0o"):
-                    mode = int(mode_str, 8)
-                elif mode_str.startswith("0"):
-                    mode = int(mode_str, 8)
-                else:
-                    mode = int(mode_str, 8)
+            mode_str = item.get("mode")
+            if mode_str:
+                mode = int(mode_str, 8)
 
             file_items.append({
                 "path": item["path"],

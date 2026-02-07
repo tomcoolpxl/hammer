@@ -150,10 +150,12 @@ def _setup_student_files(
         grading_dir: Grading bundle directory
         spec: The HAMMER spec
     """
+    from hammer.utils import validate_path_within
+
     # Copy playbook
     playbook_name = spec.entrypoints.playbook_path
-    src_playbook = student_repo / playbook_name
-    dst_playbook = grading_dir / playbook_name
+    src_playbook = validate_path_within(Path(playbook_name), student_repo)
+    dst_playbook = validate_path_within(Path(playbook_name), grading_dir)
 
     if src_playbook.exists():
         shutil.copy2(src_playbook, dst_playbook)
@@ -188,8 +190,8 @@ def _setup_student_files(
     # Copy any required files
     if spec.entrypoints.required_files:
         for req_file in spec.entrypoints.required_files:
-            src = student_repo / req_file
-            dst = grading_dir / req_file
+            src = validate_path_within(Path(req_file), student_repo)
+            dst = validate_path_within(Path(req_file), grading_dir)
             if src.exists() and src != src_playbook:
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 if src.is_dir():

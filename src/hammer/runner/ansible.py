@@ -115,9 +115,12 @@ def run_playbook(
         error_message = None if success else f"Exit code: {result.returncode}"
 
     except subprocess.TimeoutExpired as e:
-        stdout = (e.stdout or b"").decode() + (e.stderr or b"").decode()
+        # text=True means stdout/stderr may already be str (Python 3.11+)
+        stdout_part = e.stdout if isinstance(e.stdout, str) else (e.stdout or b"").decode(errors="replace")
+        stderr_part = e.stderr if isinstance(e.stderr, str) else (e.stderr or b"").decode(errors="replace")
+        stdout = stdout_part + stderr_part
         success = False
-        error_message = f"Playbook timed out after {timeout} seconds"
+        error_message = f"Playbook timed out after {timeout}s (partial output: {len(stdout)} chars)"
 
     except Exception as e:
         stdout = str(e)
