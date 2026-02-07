@@ -4,6 +4,7 @@ Runs generated tests and parses results.
 """
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -16,7 +17,7 @@ def run_phase_tests(
     tests_dir: Path,
     phase: str,
     working_dir: Path,
-    timeout: int = 300,
+    timeout: int = int(os.environ.get("HAMMER_PYTEST_TIMEOUT", "300")),
     verbose: bool = False,
 ) -> tuple[TestResult, str]:
     """
@@ -148,7 +149,7 @@ def run_all_phase_tests(
     tests_dir: Path,
     working_dir: Path,
     phases: Optional[List[str]] = None,
-    timeout: int = 300,
+    timeout: int = int(os.environ.get("HAMMER_PYTEST_TIMEOUT", "300")),
     verbose: bool = False,
 ) -> Dict[str, tuple[TestResult, str]]:
     """

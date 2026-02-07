@@ -3,6 +3,7 @@
 Provides functionality to reboot nodes after converge and wait for SSH availability.
 """
 
+import os
 import subprocess
 import time
 from dataclasses import dataclass
@@ -23,7 +24,7 @@ class RebootResult:
 def reboot_nodes(
     inventory_path: Path,
     nodes: Optional[List[str]],
-    timeout: int = 120,
+    timeout: int = int(os.environ.get("HAMMER_REBOOT_TIMEOUT", "120")),
     poll_interval: int = 5,
 ) -> Dict[str, RebootResult]:
     """

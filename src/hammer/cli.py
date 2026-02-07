@@ -1,4 +1,5 @@
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 from pydantic import ValidationError
@@ -10,9 +11,27 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich import box
 
 from hammer.spec import load_spec_from_file
+from hammer.prerequisites import check_prerequisites
 
 
 console = Console()
+
+
+def _format_validation_error(e: ValidationError, spec_path: Path) -> str:
+    """Format a Pydantic ValidationError into user-friendly output."""
+    lines = [f"Validation failed for spec: {spec_path}\n"]
+    for error in e.errors():
+        loc = " -> ".join(str(p) for p in error["loc"]) if error["loc"] else "(root)"
+        msg = error["msg"]
+        lines.append(f"  {loc}: {msg}")
+
+        # Add contextual hints
+        err_type = error.get("type", "")
+        if "value_error" in err_type and "identifier" in msg.lower():
+            lines.append("    Hint: identifiers must start with a letter and contain only [a-zA-Z0-9_-]")
+        elif "value_error" in err_type and "path" in msg.lower():
+            lines.append("    Hint: paths must not contain '..' or shell metacharacters")
+    return "\n".join(lines)
 
 
 def main():
@@ -77,6 +96,14 @@ def main():
 
     args = parser.parse_args()
 
+    # Check prerequisites
+    missing = check_prerequisites(args.command)
+    if missing:
+        console.print("[red]Missing prerequisites:[/red]")
+        for msg in missing:
+            console.print(f"  [yellow]{msg}[/yellow]")
+        sys.exit(1)
+
     if args.command == "validate":
         _cmd_validate(args)
     elif args.command == "build":
@@ -103,7 +130,7 @@ def _cmd_validate(args):
 
     except ValidationError as e:
         console.print("[red]Validation Error:[/red]")
-        console.print(str(e))
+        console.print(_format_validation_error(e, args.spec))
         sys.exit(1)
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -141,7 +168,7 @@ def _cmd_build(args):
 
     except ValidationError as e:
         console.print("[red]Validation Error:[/red]")
-        console.print(str(e))
+        console.print(_format_validation_error(e, args.spec))
         sys.exit(1)
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -263,7 +290,14 @@ def _cmd_grade(args):
 
     except ValidationError as e:
         console.print("[red]Validation Error:[/red]")
-        console.print(str(e))
+        console.print(_format_validation_error(e, args.spec))
+        sys.exit(1)
+    except subprocess.CalledProcessError:
+        console.print("[red]Execution failed.[/red]")
+        console.print("[yellow]Recovery suggestions:[/yellow]")
+        console.print("  1. Check VM status: vagrant status")
+        console.print("  2. Destroy and recreate: vagrant destroy -f && vagrant up")
+        console.print("  3. Check Ansible connectivity: ansible all -m ping")
         sys.exit(1)
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")

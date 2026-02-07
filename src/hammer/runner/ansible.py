@@ -46,7 +46,7 @@ def run_playbook(
     vault_password_file: Optional[Path] = None,
     env_vars: Optional[Dict[str, str]] = None,
     quiet: bool = False,
-    timeout: int = 600,
+    timeout: int = int(os.environ.get("HAMMER_PLAYBOOK_TIMEOUT", "600")),
 ) -> tuple[ConvergeResult, str]:
     """
     Run an Ansible playbook using subprocess.
